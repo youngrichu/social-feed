@@ -3,7 +3,7 @@
  * Plugin Name: Social Media Feed
  * Plugin URI: https://example.com/social-feed
  * Description: A WordPress plugin that aggregates and displays social media content from multiple platforms with REST API support.
- * Version: 1.1
+ * Version: 1.2
  * Author: Habtamu
  * Author URI: https://github.com/youngrichu
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('SOCIAL_FEED_VERSION', '1.1');
+define('SOCIAL_FEED_VERSION', '1.2');
 define('SOCIAL_FEED_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SOCIAL_FEED_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -74,12 +74,20 @@ require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/Cache.php';
 require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/Notifications.php';
 require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/Activator.php';
 require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/Deactivator.php';
+require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/DatabaseSchema.php';
+require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/SmartQuotaManager.php';
+require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/IntelligentScheduler.php';
+require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/LearningEngine.php';
+        require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/FallbackManager.php';
+        require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/BackwardCompatibility.php';
 
 // Include API
 require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/API/RestAPI.php';
 
 // Include Frontend and Admin
 require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Admin/Admin.php';
+require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Admin/ScheduleAdmin.php';
+require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Admin/MonitoringDashboard.php';
 require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Frontend/Frontend.php';
 
 // Include Platform files in correct order - Interface first

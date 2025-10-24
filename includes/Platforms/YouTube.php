@@ -7,6 +7,9 @@ use SocialFeed\Core\PerformanceMonitor;
 use SocialFeed\Core\RequestOptimizer;
 use SocialFeed\Core\NotificationHandler;
 use SocialFeed\Core\QuotaManager;
+use SocialFeed\Core\SmartQuotaManager;
+use SocialFeed\Core\IntelligentScheduler;
+use SocialFeed\Core\LearningEngine;
 
 class YouTube extends AbstractPlatform {
     /**
@@ -75,6 +78,21 @@ class YouTube extends AbstractPlatform {
     private $quota_manager;
 
     /**
+     * @var SmartQuotaManager
+     */
+    private $smart_quota_manager;
+
+    /**
+     * @var IntelligentScheduler
+     */
+    private $intelligent_scheduler;
+
+    /**
+     * @var LearningEngine
+     */
+    private $learning_engine;
+
+    /**
      * Constructor
      */
     public function __construct() {
@@ -92,6 +110,9 @@ class YouTube extends AbstractPlatform {
             $this->request_optimizer = new RequestOptimizer();
             $this->notification_handler = new NotificationHandler();
             $this->quota_manager = new QuotaManager();
+            $this->smart_quota_manager = new SmartQuotaManager();
+            $this->intelligent_scheduler = new IntelligentScheduler();
+            $this->learning_engine = new LearningEngine();
         } catch (\Exception $e) {
             error_log('YouTube: Error initializing components - ' . $e->getMessage());
         }
@@ -157,6 +178,88 @@ class YouTube extends AbstractPlatform {
     }
 
     /**
+     * Check if we should perform a content check now based on intelligent scheduling
+     */
+    private function should_check_now() {
+        // Check if intelligent scheduling is enabled
+        $intelligent_enabled = get_option('social_feed_intelligent_scheduling_enabled', true);
+        if (!$intelligent_enabled) {
+            return true; // Fall back to regular checking
+        }
+
+        // Get channel ID for schedule lookup
+        $channel_id = $this->config['channel_id'] ?? '';
+        if (empty($channel_id)) {
+            return true; // No channel configured, allow check
+        }
+
+        // Check if there's an active schedule for this channel
+        global $wpdb;
+        $schedule = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}social_feed_schedules 
+             WHERE channel_id = %s AND active = 1 
+             ORDER BY priority DESC LIMIT 1",
+            $channel_id
+        ));
+
+        if (!$schedule) {
+            // No intelligent schedule found, use fallback logic
+            return $this->should_fallback_check();
+        }
+
+        // Check if current time matches any schedule slots
+        $current_time = current_time('mysql');
+        $current_day = strtolower(date('l', strtotime($current_time)));
+        $current_hour_minute = date('H:i:s', strtotime($current_time));
+
+        $matching_slot = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}social_feed_schedule_slots 
+             WHERE schedule_id = %d 
+             AND day_of_week = %s 
+             AND ABS(TIME_TO_SEC(TIMEDIFF(check_time, %s))) <= 900", // Within 15 minutes
+            $schedule->id,
+            $current_day,
+            $current_hour_minute
+        ));
+
+        if ($matching_slot) {
+            error_log("YouTube: Intelligent schedule match found for {$channel_id} at {$current_hour_minute}");
+            return true;
+        }
+
+        // Check if this is a high-priority schedule that should be checked more frequently
+        if ($schedule->priority >= 4) {
+            $last_check = get_option("social_feed_last_check_{$channel_id}", 0);
+            $time_since_last = time() - $last_check;
+            
+            // High priority channels get checked every 30 minutes outside of scheduled times
+            if ($time_since_last >= 1800) {
+                error_log("YouTube: High priority channel {$channel_id} due for check");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine if we should perform a fallback check when no intelligent schedule exists
+     */
+    private function should_fallback_check() {
+        $channel_id = $this->config['channel_id'] ?? '';
+        $last_check = get_option("social_feed_last_check_{$channel_id}", 0);
+        $time_since_last = time() - $last_check;
+        
+        // Fallback to checking every hour when no schedule is configured
+        if ($time_since_last >= 3600) {
+            error_log("YouTube: Fallback check due for {$channel_id}");
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
      * Check for new videos and update cache
      */
     public function check_new_videos() {
@@ -168,19 +271,29 @@ class YouTube extends AbstractPlatform {
             return false;
         }
 
-        // Check if we're in quota exceeded state
-        $quota_exceeded_key = 'youtube_quota_exceeded_' . date('Y-m-d');
-        if (get_transient($quota_exceeded_key)) {
-            error_log('YouTube: Skipping video check due to exceeded quota');
+        // Use intelligent scheduling to determine if we should check now
+        if (!$this->should_check_now()) {
+            error_log('YouTube: Intelligent scheduler determined not to check now');
+            return false;
+        }
+
+        // Check quota availability with smart quota manager
+        if (!$this->smart_quota_manager->can_make_request('youtube', 'search')) {
+            error_log('YouTube: Smart quota manager denied request - insufficient quota');
             return false;
         }
 
         try {
+            // Record API call for quota tracking
+            $this->smart_quota_manager->record_api_call('youtube', 'search', self::QUOTA_COSTS['search']);
+            
             // Get videos with retry logic
             $videos = $this->get_videos(1);
             
             if (empty($videos)) {
                 error_log('YouTube: No videos found');
+                // Update learning engine with no content found
+                $this->learning_engine->update_check_result($this->config['channel_id'], false);
                 return false;
             }
 
@@ -238,6 +351,14 @@ class YouTube extends AbstractPlatform {
                     ]);
                 }
             }
+
+            // Update learning engine with successful content discovery
+            if ($new_videos_count > 0) {
+                $this->learning_engine->update_check_result($this->config['channel_id'], true, $new_videos_count);
+            }
+
+            // Update last check timestamp
+            update_option("social_feed_last_check_{$this->config['channel_id']}", time());
 
             error_log("YouTube: Processed {$new_videos_count} new videos");
             return true;

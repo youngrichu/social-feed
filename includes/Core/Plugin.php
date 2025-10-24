@@ -41,6 +41,8 @@ class Plugin {
 
         // Initialize social media platforms
         $this->init_platforms();
+        $this->init_fallback_manager();
+        $this->init_backward_compatibility();
     }
 
     /**
@@ -164,6 +166,14 @@ class Plugin {
     private function init_admin() {
         $admin = new \SocialFeed\Admin\Admin();
         $admin->init();
+        
+        // Initialize intelligent scheduling admin
+        $schedule_admin = new \SocialFeed\Admin\ScheduleAdmin();
+        $schedule_admin->init();
+        
+        // Initialize monitoring dashboard
+        $dashboard = new \SocialFeed\Admin\MonitoringDashboard();
+        $dashboard->init();
     }
 
     /**
@@ -212,6 +222,26 @@ class Plugin {
     }
 
     /**
+     * Initialize fallback manager
+     */
+    private function init_fallback_manager() {
+        $fallback_manager = new \SocialFeed\Core\FallbackManager();
+        $fallback_manager->init();
+        
+        // Schedule fallback revert action
+        add_action('social_feed_revert_schedule', [$fallback_manager, 'revert_schedule'], 10, 2);
+    }
+
+    /**
+     * Initialize backward compatibility
+     */
+    private function init_backward_compatibility() {
+        $backward_compatibility = new \SocialFeed\Core\BackwardCompatibility();
+        $backward_compatibility->init();
+        $backward_compatibility->handle_deprecated_functions();
+    }
+
+    /**
      * Get plugin instance
      */
     public static function get_instance() {
@@ -220,4 +250,4 @@ class Plugin {
         }
         return self::$instance;
     }
-} 
+}

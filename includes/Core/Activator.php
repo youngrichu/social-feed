@@ -54,10 +54,15 @@ class Activator {
         ) $charset_collate;";
         dbDelta($sql_streams);
 
+        // Create intelligent scheduling tables
+        require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/DatabaseSchema.php';
+        DatabaseSchema::create_tables();
+
         // Log the results
         error_log('Social Feed tables created:');
         error_log('Cache table: ' . $cache_table);
         error_log('Streams table: ' . $streams_table);
+        error_log('Intelligent scheduling tables created');
     }
 
     /**
@@ -189,4 +194,4 @@ class Activator {
             error_log('Social Feed: Added details column to notifications table');
         }
     }
-} 
+}
