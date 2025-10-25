@@ -382,6 +382,23 @@ class LearningEngine {
     }
     
     /**
+     * Initialize learning parameters for new installations
+     */
+    public function initialize_learning_parameters() {
+        // Set default learning parameters
+        update_option('social_feed_learning_min_data_points', $this->min_data_points);
+        update_option('social_feed_learning_window_days', $this->learning_window_days);
+        
+        // Initialize global learning settings
+        update_option('social_feed_learning_enabled', true);
+        update_option('social_feed_learning_auto_optimize', false);
+        update_option('social_feed_learning_confidence_threshold', 70);
+        
+        // Log initialization
+        error_log('Social Feed: Learning engine parameters initialized successfully');
+    }
+
+    /**
      * Export learning data for analysis
      */
     public function export_learning_data($schedule_id = null) {

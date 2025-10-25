@@ -373,11 +373,6 @@ class RestAPI {
             );
         }
     }
-                $e->getMessage(),
-                ['status' => 500]
-            );
-        }
-    }
 
     /**
      * Get live streams

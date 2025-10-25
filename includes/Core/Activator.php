@@ -58,6 +58,9 @@ class Activator {
         require_once SOCIAL_FEED_PLUGIN_DIR . 'includes/Core/DatabaseSchema.php';
         DatabaseSchema::create_tables();
 
+        // Set default options
+        $this->set_default_options();
+
         // Log the results
         error_log('Social Feed tables created:');
         error_log('Cache table: ' . $cache_table);
@@ -68,7 +71,7 @@ class Activator {
     /**
      * Set default plugin options
      */
-    private static function set_default_options() {
+    private function set_default_options() {
         $defaults = [
             'social_feed_version' => SOCIAL_FEED_VERSION,
             'cache_duration' => 3600, // 1 hour
