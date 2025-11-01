@@ -1,0 +1,117 @@
+# WordPress Plugin .gitignore
+# Tailored for social-feed plugin
+
+# =============================================================================
+# AI/Development Tools
+# =============================================================================
+# Trae AI generated documents and workspace
+.trae/
+
+# =============================================================================
+# Backup & Temporary Files
+# =============================================================================
+# PHP backup files (like PerformanceMonitor.php.backup)
+*.backup
+*.bak
+*.old
+*.orig
+*.rej
+*~
+
+# Temporary files
+*.tmp
+*.temp
+
+# =============================================================================
+# Logs & Performance Files
+# =============================================================================
+# Log files
+*.log
+logs/
+
+# Performance monitoring files (specific to this plugin)
+performance-*.log
+performance-*.json
+benchmark-*.json
+
+# =============================================================================
+# Test Generated Files
+# =============================================================================
+# Test output files
+test-*.html
+test-*.json
+test-*.xml
+test-results/
+coverage/
+
+# PHPUnit cache
+.phpunit.result.cache
+
+# =============================================================================
+# Cache & Runtime Files
+# =============================================================================
+# Plugin cache
+cache/
+.cache/
+plugin-cache/
+
+# PHP opcache
+opcache/
+
+# =============================================================================
+# Environment & Configuration
+# =============================================================================
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+
+# Local configuration
+*-local.php
+local-config.php
+
+# =============================================================================
+# IDE & Editor Files
+# =============================================================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# PhpStorm / IntelliJ
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+
+# =============================================================================
+# Operating System Files
+# =============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux
+.directory
+
+# =============================================================================
+# Archive Files
+# =============================================================================
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
