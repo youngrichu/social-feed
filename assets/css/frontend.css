@@ -417,10 +417,11 @@
 /* Carousel Styles */
 .social-feed-carousel {
     position: relative;
-    margin: 40px 0;
+    margin: 60px 0 80px; /* Extra breathing room to avoid perceived overlap */
     overflow: hidden;
     width: 100%;
     /* Removed max-width for edge-to-edge layout */
+    z-index: 2; /* Ensure carousel content paints above any section decorations */
 }
 
 .carousel-container {
@@ -442,17 +443,20 @@
     transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
     width: 100%;
+    gap: 24px; /* Consistent horizontal spacing across devices */
 }
 
-/* Added Margin so the slides will have gap between them */
+/* Unified spacing system for consistent gaps */
 .carousel-slide {
     flex: 0 0 400px !important;
-    padding: 0 15px;
-    margin: 0 5rem;
+    padding: 0;
+    margin: 0 4rem; /* Default: spacing via track gap */
     box-sizing: border-box;
     display: block !important;
     min-width: 0;
 }
+
+
 
 /* Increased the height to make it a bit bigger */
 .carousel-item-media {
@@ -769,10 +773,46 @@
 }
 
 /* Responsive Carousel */
-@media (max-width: 1200px) {
+
+/* Ensure containing blocks give the carousel breathing room and avoid overlap */
+.elementor-section:has(.social-feed-carousel),
+.e-con:has(.social-feed-carousel) {
+    padding-bottom: 40px;
+    overflow: visible;
+}
+
+/* MacBook Air 13" and similar displays (1400px-1600px) */
+@media (min-width: 1400px) and (max-width: 1600px) {
+    .carousel-slide {
+        flex: 0 0 360px !important;
+        margin: 0 8rem; /* Track gap controls spacing */
+    }
+    
+    /* Adjust for different heights */
+    @media (max-height: 1000px) {
+        .carousel-slide {
+            flex: 0 0 340px !important;
+            margin: 0 7rem; /* Track gap controls spacing */
+        }
+        /* Reduce media height for shorter MacBook screens to prevent internal overlap */
+        .carousel-item-media {
+            height: 30vh;
+        }
+    }
+    
+    .carousel-prev {
+        left: -30px;
+    }
+    
+    .carousel-next {
+        right: -30px;
+    }
+}
+
+@media (max-width: 1399px) {
     .carousel-slide {
         flex: 0 0 350px !important;
-        margin: 0 3rem; /* Reduced margin for smaller screens */
+        margin: 0; /* Track gap controls spacing */
     }
     
     .carousel-prev {
@@ -787,7 +827,7 @@
 @media (max-width: 1024px) {
     .carousel-slide {
         flex: 0 0 320px !important;
-        margin: 0 2rem; /* Further reduced margin for tablets */
+        margin: 0; /* Track gap controls spacing */
     }
     
     .social-feed-carousel {
@@ -801,13 +841,17 @@
 
 @media (max-width: 768px) {
     .carousel-slide {
-        flex: 0 0 280px !important;
-        padding: 0 10px;
-        margin: 0 1rem; /* Smaller margin for mobile */
+        flex: 0 0 calc(100vw - 80px) !important; /* Full width minus padding for one slide */
+        max-width: 350px !important; /* Prevent slides from getting too wide on larger mobiles */
+        margin: 0; /* Track gap controls spacing */
     }
     
     .carousel-item-media {
         height: 20vh; /* Responsive height for mobile */
+    }
+    
+    .social-feed-carousel {
+        padding: 0 20px; /* Add container padding for mobile */
     }
     
     .carousel-nav {
@@ -823,6 +867,7 @@
     .carousel-next {
         right: -20px;
     }
+}
     
     .play-button {
         width: 70px;
@@ -853,8 +898,7 @@
 @media (max-width: 480px) {
     .carousel-slide {
         flex: 0 0 260px !important;
-        padding: 0 8px;
-        margin: 0 0.5rem; /* Minimal margin for small mobile */
+        margin: 0; /* Track gap controls spacing */
     }
     
     .carousel-item-media {
