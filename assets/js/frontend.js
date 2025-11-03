@@ -275,12 +275,15 @@
             loadStreamItems(false);
         });
 
-        // Auto-refresh live streams
-        setInterval(function() {
+        // Auto-refresh live streams - using safer interval implementation
+        function autoRefreshLiveStreams() {
             if ($streams.find('.stream-item[data-status="live"]').length) {
                 loadStreamItems(true);
             }
-        }, 60000); // Every minute
+        }
+        
+        // Set up auto-refresh with proper function reference
+        const refreshInterval = setInterval(autoRefreshLiveStreams, 60000); // Every minute
 
         /**
          * Load stream items
@@ -581,18 +584,23 @@
                 isTransitioning = true;
                 const translateX = -(currentIndex * (100 / slidesToShowCurrent));
                 
+                // Safer timeout implementations with function references
+                function resetTransitionFlag() {
+                    isTransitioning = false;
+                }
+                
+                function resetTransitionWithClass() {
+                    $track.removeClass('no-transition');
+                    isTransitioning = false;
+                }
+                
                 if (animate) {
                     $track.css('transform', `translateX(${translateX}%)`);
-                    setTimeout(() => {
-                        isTransitioning = false;
-                    }, 500);
+                    setTimeout(resetTransitionFlag, 500);
                 } else {
                     $track.addClass('no-transition');
                     $track.css('transform', `translateX(${translateX}%)`);
-                    setTimeout(() => {
-                        $track.removeClass('no-transition');
-                        isTransitioning = false;
-                    }, 50);
+                    setTimeout(resetTransitionWithClass, 50);
                 }
 
                 // Update navigation buttons
@@ -671,8 +679,16 @@
                 startX = clientX;
                 
                 const transform = $track.css('transform');
-                const matrix = new DOMMatrix(transform);
-                startTransform = matrix.m41; // translateX value
+                // Safer manual CSS transform parsing instead of DOMMatrix
+                let startTransformValue = 0;
+                if (transform && transform !== 'none') {
+                    const matrixMatch = transform.match(/matrix\(([^)]+)\)/);
+                    if (matrixMatch) {
+                        const values = matrixMatch[1].split(',').map(v => parseFloat(v.trim()));
+                        startTransformValue = values[4] || 0; // translateX value (5th parameter)
+                    }
+                }
+                startTransform = startTransformValue;
                 
                 stopAutoplay();
             });
