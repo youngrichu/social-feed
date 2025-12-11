@@ -3,7 +3,8 @@ namespace SocialFeed\Platforms;
 
 use SocialFeed\Platforms\PlatformInterface;
 
-abstract class AbstractPlatform implements PlatformInterface {
+abstract class AbstractPlatform implements PlatformInterface
+{
     /**
      * @var string Platform identifier
      */
@@ -15,16 +16,24 @@ abstract class AbstractPlatform implements PlatformInterface {
     protected $config;
 
     /**
+     * @var \SocialFeed\Core\PerformanceMonitor
+     */
+    protected $performance_monitor;
+
+    /**
      * Constructor
      */
-    public function __construct() {
+    public function __construct()
+    {
         $this->config = $this->get_config();
+        $this->performance_monitor = new \SocialFeed\Core\PerformanceMonitor($this->platform);
     }
 
     /**
      * Initialize the platform
      */
-    public function init() {
+    public function init()
+    {
         if (!$this->config) {
             $this->config = $this->get_config();
         }
@@ -35,7 +44,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      *
      * @return array
      */
-    public function get_config() {
+    public function get_config()
+    {
         $platforms = get_option('social_feed_platforms', []);
         return $platforms[$this->platform] ?? [];
     }
@@ -45,7 +55,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      *
      * @return bool
      */
-    protected function is_configured() {
+    protected function is_configured()
+    {
         if (empty($this->config) || empty($this->config['enabled'])) {
             return false;
         }
@@ -60,7 +71,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param string $type Content type
      * @return array
      */
-    protected function format_feed_item($item, $type) {
+    protected function format_feed_item($item, $type)
+    {
         return [
             'id' => $item['id'],
             'platform' => $this->platform,
@@ -92,7 +104,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param array $stream Raw platform stream data
      * @return array
      */
-    protected function format_stream($stream) {
+    protected function format_stream($stream)
+    {
         return [
             'id' => $stream['id'],
             'platform' => $this->platform,
@@ -120,7 +133,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @return array
      * @throws \Exception
      */
-    protected function make_request($url, $args = [], $max_retries = 3) {
+    protected function make_request($url, $args = [], $max_retries = 3)
+    {
         $attempt = 0;
         $last_exception = null;
 
@@ -135,12 +149,21 @@ abstract class AbstractPlatform implements PlatformInterface {
                 }
 
                 // Make request
+                $start_time = microtime(true);
                 $response = wp_remote_request($url, $args);
+                $duration = microtime(true) - $start_time;
+
+                // Record performance metric
+                $this->performance_monitor->record_api_response_time(
+                    $url,
+                    $duration,
+                    is_wp_error($response) ? 0 : wp_remote_retrieve_response_code($response)
+                );
 
                 // Handle WordPress errors
                 if (is_wp_error($response)) {
                     $error_message = $response->get_error_message();
-                    
+
                     // Check if it's a retryable error
                     if ($this->is_retryable_error($error_message) && $attempt < $max_retries) {
                         $this->log_retry_attempt($attempt + 1, $error_message, $url);
@@ -148,12 +171,12 @@ abstract class AbstractPlatform implements PlatformInterface {
                         $attempt++;
                         continue;
                     }
-                    
+
                     throw new \Exception($error_message);
                 }
 
                 $status = wp_remote_retrieve_response_code($response);
-                
+
                 // Handle successful response
                 if ($status === 200) {
                     // Parse response
@@ -174,13 +197,13 @@ abstract class AbstractPlatform implements PlatformInterface {
 
                 // Handle error status codes
                 $error_message = "API request failed with status: $status";
-                
+
                 // Handle rate limiting
                 if ($status === 429) {
                     $retry_after = wp_remote_retrieve_header($response, 'retry-after');
-                    $wait_time = $retry_after ? (int)$retry_after : $this->calculate_backoff_delay($attempt);
+                    $wait_time = $retry_after ? (int) $retry_after : $this->calculate_backoff_delay($attempt);
                     set_transient($rate_key, true, $wait_time);
-                    
+
                     if ($attempt < $max_retries) {
                         $this->log_retry_attempt($attempt + 1, "Rate limited (429)", $url);
                         sleep($wait_time);
@@ -201,12 +224,12 @@ abstract class AbstractPlatform implements PlatformInterface {
 
             } catch (\Exception $e) {
                 $last_exception = $e;
-                
+
                 // Don't retry if it's not a retryable error or we've reached max retries
                 if (!$this->is_retryable_exception($e) || $attempt >= $max_retries) {
                     break;
                 }
-                
+
                 $this->log_retry_attempt($attempt + 1, $e->getMessage(), $url);
                 $this->wait_with_backoff($attempt);
                 $attempt++;
@@ -218,7 +241,7 @@ abstract class AbstractPlatform implements PlatformInterface {
             'attempts' => $attempt,
             'last_error' => $last_exception ? $last_exception->getMessage() : 'Unknown error'
         ]);
-        
+
         throw $last_exception ?: new \Exception("Request failed after $max_retries retries");
     }
 
@@ -228,7 +251,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param string $error_message
      * @return bool
      */
-    protected function is_retryable_error($error_message) {
+    protected function is_retryable_error($error_message)
+    {
         $retryable_patterns = [
             'timeout',
             'connection',
@@ -254,7 +278,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param int $status
      * @return bool
      */
-    protected function is_retryable_status($status) {
+    protected function is_retryable_status($status)
+    {
         $retryable_statuses = [429, 500, 502, 503, 504];
         return in_array($status, $retryable_statuses);
     }
@@ -265,7 +290,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param \Exception $exception
      * @return bool
      */
-    protected function is_retryable_exception($exception) {
+    protected function is_retryable_exception($exception)
+    {
         return $this->is_retryable_error($exception->getMessage());
     }
 
@@ -275,13 +301,14 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param int $attempt
      * @return int Delay in seconds
      */
-    protected function calculate_backoff_delay($attempt) {
+    protected function calculate_backoff_delay($attempt)
+    {
         // Base delay: 1s, 2s, 4s, 8s...
         $base_delay = pow(2, $attempt);
-        
+
         // Add jitter (random 0-50% of base delay)
         $jitter = mt_rand(0, $base_delay * 0.5);
-        
+
         return min($base_delay + $jitter, 30); // Cap at 30 seconds
     }
 
@@ -290,7 +317,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      *
      * @param int $attempt
      */
-    protected function wait_with_backoff($attempt) {
+    protected function wait_with_backoff($attempt)
+    {
         $delay = $this->calculate_backoff_delay($attempt);
         sleep($delay);
     }
@@ -302,7 +330,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param string $error
      * @param string $url
      */
-    protected function log_retry_attempt($attempt, $error, $url) {
+    protected function log_retry_attempt($attempt, $error, $url)
+    {
         $this->log_error("Retry attempt $attempt", [
             'url' => $url,
             'error' => $error,
@@ -316,7 +345,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param int $attempts
      * @param string $url
      */
-    protected function log_successful_retry($attempts, $url) {
+    protected function log_successful_retry($attempts, $url)
+    {
         error_log(json_encode([
             'platform' => $this->platform,
             'message' => "Request succeeded after $attempts retries",
@@ -331,7 +361,8 @@ abstract class AbstractPlatform implements PlatformInterface {
      * @param string $message
      * @param mixed $context
      */
-    protected function log_error($message, $context = null) {
+    protected function log_error($message, $context = null)
+    {
         $error = [
             'platform' => $this->platform,
             'message' => $message,

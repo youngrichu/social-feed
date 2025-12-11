@@ -8,7 +8,8 @@ use SocialFeed\Core\RequestOptimizer;
 use SocialFeed\Core\NotificationHandler;
 use SocialFeed\Core\QuotaManager;
 
-class YouTube extends AbstractPlatform {
+class YouTube extends AbstractPlatform
+{
     /**
      * @var string YouTube Data API base URL
      */
@@ -77,13 +78,14 @@ class YouTube extends AbstractPlatform {
     /**
      * Constructor
      */
-    public function __construct() {
+    public function __construct()
+    {
         // Set platform identifier first
         $this->platform = 'youtube';
-        
+
         // Initialize parent class
         parent::__construct();
-        
+
         // Initialize components
         try {
             $this->content_processor = new ContentProcessor();
@@ -100,24 +102,25 @@ class YouTube extends AbstractPlatform {
     /**
      * Initialize the platform
      */
-    public function init() {
+    public function init()
+    {
         static $initialized = false;
-        
+
         if ($initialized) {
             return;
         }
-        
+
         if (!$this->is_configured()) {
             error_log('YouTube: Platform not configured properly');
             return;
         }
 
         error_log('YouTube: Initializing platform');
-        
+
         // Add action hooks for scheduled events
         add_action('social_feed_youtube_check_new_videos', [$this, 'check_new_videos']);
         add_action('social_feed_youtube_check_live_streams', [$this, 'check_live_streams']);
-        
+
         $initialized = true;
     }
 
@@ -126,10 +129,11 @@ class YouTube extends AbstractPlatform {
      *
      * @return bool
      */
-    public function is_configured() {
+    public function is_configured()
+    {
         $options = get_option('social_feed_platforms', []);
         $config = $options['youtube'] ?? [];
-        
+
         if (empty($config['enabled']) || empty($config['api_key']) || empty($config['channel_id'])) {
             return false;
         }
@@ -144,7 +148,8 @@ class YouTube extends AbstractPlatform {
      * @param array $schedules
      * @return array
      */
-    public function add_cron_schedules($schedules) {
+    public function add_cron_schedules($schedules)
+    {
         $schedules['five_minutes'] = [
             'interval' => 300,
             'display' => 'Every 5 Minutes'
@@ -159,7 +164,8 @@ class YouTube extends AbstractPlatform {
     /**
      * Check for new videos and update cache
      */
-    public function check_new_videos() {
+    public function check_new_videos()
+    {
         echo "YouTube: Starting check_new_videos()\n";
 
         // Check if platform is configured
@@ -171,10 +177,10 @@ class YouTube extends AbstractPlatform {
         try {
             // Get videos
             $videos = $this->get_videos(1); // Start with just 1 page for testing
-            
+
             if (empty($videos)) {
                 error_log('YouTube: No videos found');
-                    return false;
+                return false;
             }
 
             error_log('YouTube: Found ' . count($videos) . ' videos');
@@ -182,10 +188,10 @@ class YouTube extends AbstractPlatform {
             // Store videos in cache
             global $wpdb;
             $cache_table = $wpdb->prefix . 'social_feed_cache';
-            
+
             foreach ($videos as $video) {
                 error_log('YouTube: Processing video: ' . json_encode($video));
-                
+
                 // Check if video already exists
                 $exists = $wpdb->get_var($wpdb->prepare(
                     "SELECT COUNT(*) FROM $cache_table WHERE platform = %s AND content_id = %s",
@@ -223,7 +229,7 @@ class YouTube extends AbstractPlatform {
                 }
             }
 
-                return true;
+            return true;
         } catch (\Exception $e) {
             error_log('YouTube: Error in check_new_videos: ' . $e->getMessage());
             error_log('YouTube: Error trace: ' . $e->getTraceAsString());
@@ -234,13 +240,14 @@ class YouTube extends AbstractPlatform {
     /**
      * Get details for a single video
      */
-    private function get_video_details($video_id) {
+    private function get_video_details($video_id)
+    {
         $params = [
             'part' => 'snippet,statistics,contentDetails,liveStreamingDetails',
             'id' => $video_id,
             'key' => $this->config['api_key']
         ];
-        
+
         $data = $this->make_api_request(self::API_BASE_URL . '/videos', $params, 'videos');
         return !empty($data['items'][0]) ? $data['items'][0] : null;
     }
@@ -248,7 +255,8 @@ class YouTube extends AbstractPlatform {
     /**
      * Check for live streams and update cache
      */
-    public function check_live_streams() {
+    public function check_live_streams()
+    {
         // Check if live stream checking is enabled
         if (empty($this->config['enable_live_check'])) {
             error_log('YouTube: Live stream checking is disabled in settings');
@@ -297,20 +305,20 @@ class YouTube extends AbstractPlatform {
             // Only search for new streams if we haven't exceeded our quota
             if ($this->check_quota('search')) {
                 // Search for live streams
-            $params = [
-                'part' => 'snippet',
-                'channelId' => $this->config['channel_id'],
-                'eventType' => 'live',
-                'type' => 'video',
+                $params = [
+                    'part' => 'snippet',
+                    'channelId' => $this->config['channel_id'],
+                    'eventType' => 'live',
+                    'type' => 'video',
                     'key' => $this->config['api_key'],
                     'maxResults' => 50
-            ];
+                ];
 
                 $live_data = $this->make_api_request(self::API_BASE_URL . '/search', $params, 'search');
-            
+
                 if (!empty($live_data['items'])) {
                     foreach ($live_data['items'] as $item) {
-                    $video_id = $item['id']['videoId'];
+                        $video_id = $item['id']['videoId'];
                         $this->process_live_stream($video_id);
                     }
                 }
@@ -319,7 +327,7 @@ class YouTube extends AbstractPlatform {
                 if ($this->check_quota('search')) {
                     $params['eventType'] = 'upcoming';
                     $upcoming_data = $this->make_api_request(self::API_BASE_URL . '/search', $params, 'search');
-                    
+
                     if (!empty($upcoming_data['items'])) {
                         foreach ($upcoming_data['items'] as $item) {
                             $video_id = $item['id']['videoId'];
@@ -333,7 +341,7 @@ class YouTube extends AbstractPlatform {
                     $params['eventType'] = 'completed';
                     $params['publishedAfter'] = date('c', strtotime('-7 days'));
                     $completed_data = $this->make_api_request(self::API_BASE_URL . '/search', $params, 'search');
-                    
+
                     if (!empty($completed_data['items'])) {
                         foreach ($completed_data['items'] as $item) {
                             $video_id = $item['id']['videoId'];
@@ -351,7 +359,8 @@ class YouTube extends AbstractPlatform {
     /**
      * Process a live stream and update its status
      */
-    private function process_live_stream($video_id) {
+    private function process_live_stream($video_id)
+    {
         if (!$this->check_quota('videos')) {
             return;
         }
@@ -366,19 +375,21 @@ class YouTube extends AbstractPlatform {
             $streaming_details = $video_data['liveStreamingDetails'] ?? [];
             if (empty($streaming_details)) {
                 // Check if this was a live stream by looking at the video title and liveBroadcastContent
-                if (strpos($video_data['snippet']['title'], 'ቅዳሴ') === false &&
+                if (
+                    strpos($video_data['snippet']['title'], 'ቅዳሴ') === false &&
                     strpos($video_data['snippet']['title'], 'የካቲት') === false &&
-                    $video_data['snippet']['liveBroadcastContent'] === 'none') {
+                    $video_data['snippet']['liveBroadcastContent'] === 'none'
+                ) {
                     error_log("YouTube: Video {$video_id} is not a live stream");
                     return;
                 }
-                
+
                 // If it's a liturgical video but missing streaming details, try to infer them
                 $published_time = new \DateTime($video_data['snippet']['publishedAt']);
                 $scheduled_time = clone $published_time;
                 $end_time = clone $published_time;
                 $end_time->modify('+3 hours');
-                
+
                 // For liturgical services, we assume they start at the scheduled time
                 $streaming_details = [
                     'scheduledStartTime' => $scheduled_time->format('c'),
@@ -391,7 +402,7 @@ class YouTube extends AbstractPlatform {
 
             global $wpdb;
             $table = $wpdb->prefix . 'social_feed_streams';
-            
+
             // Check if stream already exists
             $existing_stream = $wpdb->get_row(
                 $wpdb->prepare(
@@ -411,10 +422,10 @@ class YouTube extends AbstractPlatform {
                 $this->insert_new_stream($video_data);
             }
 
-            error_log("YouTube: Processed stream {$video_id} with start time: " . 
-                     ($streaming_details['actualStartTime'] ?? 'none') . 
-                     " and scheduled time: " . 
-                     ($streaming_details['scheduledStartTime'] ?? 'none'));
+            error_log("YouTube: Processed stream {$video_id} with start time: " .
+                ($streaming_details['actualStartTime'] ?? 'none') .
+                " and scheduled time: " .
+                ($streaming_details['scheduledStartTime'] ?? 'none'));
 
         } catch (\Exception $e) {
             error_log('YouTube: Error processing live stream ' . $video_id . ': ' . $e->getMessage());
@@ -424,20 +435,21 @@ class YouTube extends AbstractPlatform {
     /**
      * Enhanced API request with optimization
      */
-    private function make_api_request($endpoint, $params = [], $operation = 'videos') {
+    private function make_api_request($endpoint, $params = [], $operation = 'videos')
+    {
         // Check optimal timing through RequestOptimizer
         $timing = $this->request_optimizer->get_optimal_timing($operation);
-        
+
         if ($timing === 'quota_exceeded') {
             return false;
         }
-        
+
         // Estimate quota cost and check if safe to proceed
         $quota_estimate = $this->quota_manager->estimate_quota_cost([$operation]);
         if (!$quota_estimate['is_safe']) {
             error_log("YouTube API: Operation {$operation} would exceed remaining quota. " .
-                     "Cost: {$quota_estimate['estimated_cost']}, " .
-                     "Remaining: {$quota_estimate['remaining_quota']}");
+                "Cost: {$quota_estimate['estimated_cost']}, " .
+                "Remaining: {$quota_estimate['remaining_quota']}");
             return false;
         }
 
@@ -468,7 +480,7 @@ class YouTube extends AbstractPlatform {
 
         // Optimize request parameters
         $params = $this->request_optimizer->optimize_params($params, $operation);
-        
+
         try {
             // Ensure we have the API key
             if (!isset($params['key']) && isset($this->config['api_key'])) {
@@ -477,11 +489,20 @@ class YouTube extends AbstractPlatform {
 
             $url = (strpos($endpoint, 'http') === 0) ? $endpoint : self::API_BASE_URL . '/' . $endpoint;
             $full_url = add_query_arg($params, $url);
-            
+
             // Use output buffering to prevent debug output
             ob_start();
+            $start_time = microtime(true);
             $response = wp_remote_get($full_url);
+            $duration = microtime(true) - $start_time;
             ob_end_clean();
+
+            // Record performance metric
+            $this->performance_monitor->record_api_response_time(
+                $full_url,
+                $duration,
+                is_wp_error($response) ? 0 : wp_remote_retrieve_response_code($response)
+            );
 
             if (is_wp_error($response)) {
                 error_log("YouTube API Error: " . $response->get_error_message());
@@ -535,9 +556,10 @@ class YouTube extends AbstractPlatform {
      * @return array
      * @throws \Exception
      */
-    protected function make_request($url, $args = [], $max_retries = 3) {
+    protected function make_request($url, $args = [], $max_retries = 3)
+    {
         error_log('YouTube API Request: ' . $url . ' with args: ' . json_encode($args['body'] ?? []));
-        
+
         // Convert YouTube-specific args format to standard format for parent method
         $standard_args = [];
         if (isset($args['body'])) {
@@ -545,11 +567,11 @@ class YouTube extends AbstractPlatform {
             $url_with_params = $url . '?' . http_build_query($args['body']);
             $standard_args = array_merge($args, ['method' => 'GET']);
             unset($standard_args['body']);
-            
+
             // Use parent class retry logic with YouTube-specific URL handling
             return parent::make_request($url_with_params, $standard_args, $max_retries);
         }
-        
+
         // Fallback to parent method for standard requests
         return parent::make_request($url, $args, $max_retries);
     }
@@ -557,7 +579,8 @@ class YouTube extends AbstractPlatform {
     /**
      * Enhanced content fetching with performance monitoring
      */
-    public function get_feed($types = [], $max_pages = 5) {
+    public function get_feed($types = [], $max_pages = 5)
+    {
         try {
             $start_time = microtime(true);
             $feed_items = [];
@@ -565,9 +588,9 @@ class YouTube extends AbstractPlatform {
 
             // Determine which content types to fetch
             $fetch_types = empty($types) ? $this->get_supported_types() : array_intersect($types, $this->get_supported_types());
-            
+
             error_log('YouTube: Fetching feed for types: ' . implode(', ', $fetch_types));
-            
+
             // Get videos
             if (in_array('video', $fetch_types) || in_array('short', $fetch_types)) {
                 $videos = $this->get_videos($max_pages);
@@ -586,9 +609,9 @@ class YouTube extends AbstractPlatform {
             // Standardize all existing videos in cache even if not fetched
             $this->standardize_cached_videos();
 
-            error_log('YouTube: Fetched ' . count($feed_items) . ' items in ' . 
-                     (microtime(true) - $start_time) . ' seconds');
-                     
+            error_log('YouTube: Fetched ' . count($feed_items) . ' items in ' .
+                (microtime(true) - $start_time) . ' seconds');
+
             return $feed_items;
         } catch (\Exception $e) {
             error_log('YouTube: Error fetching feed - ' . $e->getMessage());
@@ -599,31 +622,32 @@ class YouTube extends AbstractPlatform {
     /**
      * Standardize all cached videos to ensure consistent structure
      */
-    private function standardize_cached_videos() {
+    private function standardize_cached_videos()
+    {
         global $wpdb;
         $cache_table = $wpdb->prefix . 'social_feed_cache';
-        
+
         // Get all cached videos
         $videos = $wpdb->get_results($wpdb->prepare(
             "SELECT id, content_id, content FROM $cache_table WHERE platform = %s",
             'youtube'
         ));
-        
+
         if (empty($videos)) {
             return;
         }
-        
+
         error_log("YouTube: Standardizing " . count($videos) . " cached videos");
-        
+
         foreach ($videos as $video) {
             $content = json_decode($video->content, true);
             if (empty($content)) {
                 continue;
             }
-            
+
             // Check for missing fields
             $updated = false;
-            
+
             // Add media_url and original_url if missing
             if (empty($content['media_url']) || empty($content['original_url'])) {
                 $content['media_url'] = "https://www.youtube.com/watch?v={$content['id']}";
@@ -631,7 +655,7 @@ class YouTube extends AbstractPlatform {
                 $updated = true;
                 error_log("YouTube: Added missing URLs for video {$content['id']}");
             }
-            
+
             // Ensure engagement data structure
             if (empty($content['engagement'])) {
                 $content['engagement'] = [
@@ -643,10 +667,12 @@ class YouTube extends AbstractPlatform {
                 $updated = true;
                 error_log("YouTube: Added missing engagement structure for video {$content['id']}");
             }
-            
+
             // Ensure individual stats
-            if (!isset($content['views']) || !isset($content['likes']) || 
-                !isset($content['comments']) || !isset($content['shares'])) {
+            if (
+                !isset($content['views']) || !isset($content['likes']) ||
+                !isset($content['comments']) || !isset($content['shares'])
+            ) {
                 $content['views'] = $content['engagement']['views'] ?? 0;
                 $content['likes'] = $content['engagement']['likes'] ?? 0;
                 $content['comments'] = $content['engagement']['comments'] ?? 0;
@@ -654,26 +680,26 @@ class YouTube extends AbstractPlatform {
                 $updated = true;
                 error_log("YouTube: Added missing individual stats for video {$content['id']}");
             }
-            
+
             // Ensure author info
             if (empty($content['author_name'])) {
                 $content['author_name'] = 'Dubai Debre Mewi';
                 $updated = true;
                 error_log("YouTube: Added missing author name for video {$content['id']}");
             }
-            
+
             if (empty($content['author_profile'])) {
                 $content['author_profile'] = 'https://www.youtube.com/channel/UC5D_jWcqHBVu18iDtxxx_mQ';
                 $updated = true;
                 error_log("YouTube: Added missing author profile for video {$content['id']}");
             }
-            
+
             if (!isset($content['author_avatar'])) {
                 $content['author_avatar'] = '';
                 $updated = true;
                 error_log("YouTube: Added missing author avatar for video {$content['id']}");
             }
-            
+
             // Ensure metadata
             if (empty($content['metadata'])) {
                 $content['metadata'] = [
@@ -684,14 +710,14 @@ class YouTube extends AbstractPlatform {
                 $updated = true;
                 error_log("YouTube: Added missing metadata for video {$content['id']}");
             }
-            
+
             // Ensure updated_at field
             if (empty($content['updated_at'])) {
                 $content['updated_at'] = current_time('mysql');
                 $updated = true;
                 error_log("YouTube: Added missing updated_at for video {$content['id']}");
             }
-            
+
             // If any fields were updated, save the changes
             if ($updated) {
                 $wpdb->update(
@@ -709,7 +735,8 @@ class YouTube extends AbstractPlatform {
     /**
      * Check if operation is essential
      */
-    private function is_essential_operation($operation) {
+    private function is_essential_operation($operation)
+    {
         return in_array($operation, ['playlistItems', 'videos']);
     }
 
@@ -719,7 +746,8 @@ class YouTube extends AbstractPlatform {
      * @param string $stream_id
      * @return array|null
      */
-    public function get_stream_status($stream_id) {
+    public function get_stream_status($stream_id)
+    {
         if (!$this->is_configured()) {
             return null;
         }
@@ -772,7 +800,8 @@ class YouTube extends AbstractPlatform {
      * @param array $config
      * @return bool
      */
-    public function validate_config($config) {
+    public function validate_config($config)
+    {
         return !empty($config['api_key']) && !empty($config['channel_id']);
     }
 
@@ -781,7 +810,8 @@ class YouTube extends AbstractPlatform {
      *
      * @return array
      */
-    public function get_supported_types() {
+    public function get_supported_types()
+    {
         return ['video', 'short', 'live'];
     }
 
@@ -790,18 +820,19 @@ class YouTube extends AbstractPlatform {
      *
      * @return int
      */
-    private function get_memory_limit() {
+    private function get_memory_limit()
+    {
         $memory_limit = ini_get('memory_limit');
-        
+
         if ($memory_limit === '-1') {
             // No memory limit
             return PHP_INT_MAX;
         }
-        
+
         // Convert memory limit to bytes
         $unit = strtolower(substr($memory_limit, -1));
         $value = (int) substr($memory_limit, 0, -1);
-        
+
         switch ($unit) {
             case 'g':
                 $value *= 1024 * 1024 * 1024;
@@ -813,7 +844,7 @@ class YouTube extends AbstractPlatform {
                 $value *= 1024;
                 break;
         }
-        
+
         return $value;
     }
 
@@ -823,14 +854,15 @@ class YouTube extends AbstractPlatform {
      * @param int $bytes
      * @return string
      */
-    private function format_bytes($bytes) {
+    private function format_bytes($bytes)
+    {
         $units = ['B', 'KB', 'MB', 'GB'];
         $bytes = max($bytes, 0);
         $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
         $pow = min($pow, count($units) - 1);
-        
+
         $bytes /= (1 << (10 * $pow));
-        
+
         return round($bytes, 2) . ' ' . $units[$pow];
     }
 
@@ -839,42 +871,43 @@ class YouTube extends AbstractPlatform {
      *
      * @return int Interval in seconds
      */
-    public function calculate_optimal_interval() {
+    public function calculate_optimal_interval()
+    {
         $quota_stats = $this->get_quota_stats();
         $today = date('Y-m-d');
         $current_usage = isset($quota_stats[$today]) ? ($quota_stats[$today]['usage'] ?? 0) : 0;
-        
+
         // Calculate percentage of quota used
         $quota_percentage = ($current_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
-        
+
         // Get remaining hours in the day
         $now = new \DateTime();
         $end_of_day = new \DateTime('tomorrow midnight');
         $hours_remaining = ($end_of_day->getTimestamp() - $now->getTimestamp()) / 3600;
-        
+
         // Calculate remaining quota
         $remaining_quota = self::QUOTA_LIMIT_PER_DAY - $current_usage;
-        
+
         // Cost per check (search + average video details)
         $cost_per_check = self::QUOTA_COSTS['search'] + (self::QUOTA_COSTS['videos'] * 5);
-        
+
         // Calculate how many checks we can still do
         $possible_checks = floor($remaining_quota / $cost_per_check);
-        
+
         // Calculate optimal interval
         if ($possible_checks <= 0 || $hours_remaining <= 0) {
             return self::MAX_CHECK_INTERVAL;
         }
-        
+
         $optimal_interval = ceil(($hours_remaining * 3600) / $possible_checks);
-        
+
         // Adjust interval based on quota usage percentage
         if ($quota_percentage >= 90) {
             $optimal_interval *= 2; // Double the interval if quota usage is critical
         } elseif ($quota_percentage >= 75) {
             $optimal_interval *= 1.5; // Increase interval by 50% if quota usage is high
         }
-        
+
         // Ensure interval stays within bounds
         return max(self::MIN_CHECK_INTERVAL, min(self::MAX_CHECK_INTERVAL, $optimal_interval));
     }
@@ -884,7 +917,8 @@ class YouTube extends AbstractPlatform {
      *
      * @return float
      */
-    public function get_quota_usage_percentage() {
+    public function get_quota_usage_percentage()
+    {
         $quota_stats = $this->get_quota_stats();
         $today = date('Y-m-d');
         $current_usage = isset($quota_stats[$today]) ? ($quota_stats[$today]['usage'] ?? 0) : 0;
@@ -897,7 +931,8 @@ class YouTube extends AbstractPlatform {
      * @param string $operation
      * @return bool
      */
-    private function check_quota($operation) {
+    private function check_quota($operation)
+    {
         try {
             return $this->quota_manager->check_quota($operation);
         } catch (\Exception $e) {
@@ -911,10 +946,11 @@ class YouTube extends AbstractPlatform {
      *
      * @return array
      */
-    public function get_quota_stats() {
+    public function get_quota_stats()
+    {
         $quota_stats = get_option('youtube_quota_stats', []);
         $today = date('Y-m-d');
-        
+
         if (!isset($quota_stats[$today])) {
             $quota_stats[$today] = [
                 'usage' => $this->get_current_quota_usage(),
@@ -923,7 +959,7 @@ class YouTube extends AbstractPlatform {
             ];
             update_option('youtube_quota_stats', $quota_stats);
         }
-        
+
         return $quota_stats;
     }
 
@@ -932,7 +968,8 @@ class YouTube extends AbstractPlatform {
      *
      * @return int
      */
-    private function get_current_quota_usage() {
+    private function get_current_quota_usage()
+    {
         $quota_key = 'youtube_quota_usage_' . date('Y-m-d');
         return get_transient($quota_key) ?: 0;
     }
@@ -942,10 +979,11 @@ class YouTube extends AbstractPlatform {
      *
      * @return bool
      */
-    private function test_api_key() {
+    private function test_api_key()
+    {
         try {
             error_log('YouTube: Testing API key with minimal request');
-            
+
             // Use a minimal API call to test the key
             $params = [
                 'part' => 'contentDetails',
@@ -955,10 +993,10 @@ class YouTube extends AbstractPlatform {
 
             $data = $this->make_api_request(self::API_BASE_URL . '/channels', $params, 'channels');
             $success = !empty($data['items'][0]['contentDetails']);
-            
-            error_log('YouTube: API key test ' . ($success ? 'passed' : 'failed') . 
-                     ' - Response: ' . json_encode($data));
-            
+
+            error_log('YouTube: API key test ' . ($success ? 'passed' : 'failed') .
+                ' - Response: ' . json_encode($data));
+
             return $success;
         } catch (\Exception $e) {
             error_log('YouTube: API key test failed - ' . $e->getMessage());
@@ -972,23 +1010,24 @@ class YouTube extends AbstractPlatform {
      *
      * @return bool
      */
-    public function reset_quota() {
+    public function reset_quota()
+    {
         $quota_key = 'youtube_quota_usage_' . date('Y-m-d');
         delete_transient($quota_key);
-        
+
         $quota_stats = get_option('youtube_quota_stats', []);
         $today = date('Y-m-d');
-        
+
         $quota_stats[$today] = [
             'usage' => 0,
             'operations' => [],
             'reset_at' => current_time('mysql'),
             'last_update' => current_time('mysql')
         ];
-        
+
         update_option('youtube_quota_stats', $quota_stats);
         error_log('YouTube: Quota usage reset');
-        
+
         return true;
     }
 
@@ -998,7 +1037,8 @@ class YouTube extends AbstractPlatform {
      * @param int $max_pages Maximum number of pages to fetch
      * @return array
      */
-    public function get_videos($max_pages = 5) {
+    public function get_videos($max_pages = 5)
+    {
         $all_items = [];
         $next_page_token = null;
         $page_count = 0;
@@ -1006,17 +1046,17 @@ class YouTube extends AbstractPlatform {
 
         try {
             error_log("YouTube: Starting video fetch with max_pages: $max_pages");
-            
+
             // Get uploads playlist ID with longer cache duration
             $uploads_playlist_id = get_transient('youtube_uploads_playlist_' . $this->config['channel_id']);
-            
+
             if (!$uploads_playlist_id && $this->check_quota('channels')) {
                 $channel_params = [
                     'part' => 'contentDetails',
                     'id' => $this->config['channel_id'],
                     'key' => $this->config['api_key']
                 ];
-                
+
                 $channel_data = $this->make_api_request(self::API_BASE_URL . '/channels', $channel_params, 'channels');
                 if (!empty($channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads'])) {
                     $uploads_playlist_id = $channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads'];
@@ -1079,7 +1119,7 @@ class YouTube extends AbstractPlatform {
                     foreach ($data['items'] as $item) {
                         if (!empty($item['snippet']['resourceId']['videoId'])) {
                             $published_at = strtotime($item['snippet']['publishedAt']);
-                            
+
                             // For initial fetch, get all videos
                             // For updates, only get videos from last 24 hours
                             if ($is_initial_fetch || $published_at >= strtotime('-24 hours')) {
@@ -1117,36 +1157,36 @@ class YouTube extends AbstractPlatform {
             // STEP 2: Get complete video details in batches of 50 with memory optimization
             $unique_ids = array_unique($video_ids);
             $video_batches = array_chunk($unique_ids, 50);
-            
+
             // Memory optimization: Track memory usage and implement streaming processing
             $initial_memory = memory_get_usage(true);
             $memory_limit = $this->get_memory_limit();
             $processed_count = 0;
-            
-            error_log("YouTube: Starting batch processing. Initial memory: " . $this->format_bytes($initial_memory) . 
-                     ", Memory limit: " . $this->format_bytes($memory_limit));
-            
+
+            error_log("YouTube: Starting batch processing. Initial memory: " . $this->format_bytes($initial_memory) .
+                ", Memory limit: " . $this->format_bytes($memory_limit));
+
             foreach ($video_batches as $batch_index => $batch) {
                 // Check memory usage before processing each batch
                 $current_memory = memory_get_usage(true);
                 $memory_usage_percent = ($current_memory / $memory_limit) * 100;
-                
+
                 if ($memory_usage_percent > 80) {
                     error_log("YouTube: Memory usage at {$memory_usage_percent}% - implementing memory optimization");
-                    
+
                     // Force garbage collection
                     gc_collect_cycles();
-                    
+
                     // If still high memory usage, reduce batch size or stop processing
                     $current_memory = memory_get_usage(true);
                     $memory_usage_percent = ($current_memory / $memory_limit) * 100;
-                    
+
                     if ($memory_usage_percent > 85) {
                         error_log("YouTube: Memory usage still high at {$memory_usage_percent}% - stopping batch processing to prevent memory exhaustion");
                         break;
                     }
                 }
-                
+
                 if (!$this->check_quota('videos')) {
                     error_log('YouTube: Insufficient quota for video details');
                     break;
@@ -1159,11 +1199,11 @@ class YouTube extends AbstractPlatform {
                     'key' => $this->config['api_key']
                 ];
 
-                error_log("YouTube: Processing batch " . ($batch_index + 1) . "/" . count($video_batches) . 
-                         " (" . count($batch) . " videos) - Memory: " . $this->format_bytes($current_memory));
-                
+                error_log("YouTube: Processing batch " . ($batch_index + 1) . "/" . count($video_batches) .
+                    " (" . count($batch) . " videos) - Memory: " . $this->format_bytes($current_memory));
+
                 $batch_data = $this->make_api_request(self::API_BASE_URL . '/videos', $params, 'videos');
-            
+
                 if (!empty($batch_data['items'])) {
                     // Process videos in streaming fashion to minimize memory footprint
                     foreach ($batch_data['items'] as $video) {
@@ -1172,57 +1212,57 @@ class YouTube extends AbstractPlatform {
                             error_log("YouTube: Skipping video with missing snippet: " . $video['id']);
                             continue;
                         }
-                        
+
                         // Verify we have statistics
                         if (empty($video['statistics'])) {
                             error_log("YouTube: Warning - Missing statistics for video: " . $video['id']);
                         }
-                        
+
                         // Format the video data with ALL required fields
                         $formatted_item = $this->format_feed_item($video, 'video');
                         if ($formatted_item) {
                             // Add to return array
                             $all_items[] = $formatted_item;
-                            
+
                             // Store in cache with complete data
                             $this->store_video_in_cache($formatted_item);
-                            
+
                             $processed_count++;
-                            
+
                             // Log progress every 50 videos
                             if ($processed_count % 50 === 0) {
                                 $current_memory = memory_get_usage(true);
                                 error_log("YouTube: Processed {$processed_count} videos - Memory: " . $this->format_bytes($current_memory));
                             }
                         }
-                        
+
                         // Clear video data from memory immediately after processing
                         unset($video, $formatted_item);
                     }
-                    
+
                     // Clear batch data from memory
                     unset($batch_data);
-                    
+
                 } else {
                     error_log("YouTube: No items returned for batch of " . count($batch) . " videos");
                 }
-                
+
                 // Clear batch from memory
                 unset($batch);
-                
+
                 // Periodic garbage collection every 5 batches
                 if (($batch_index + 1) % 5 === 0) {
                     gc_collect_cycles();
                 }
             }
-            
+
             // Final memory usage report
             $final_memory = memory_get_usage(true);
             $peak_memory = memory_get_peak_usage(true);
             error_log("YouTube: Batch processing complete. Processed {$processed_count} videos. " .
-                     "Final memory: " . $this->format_bytes($final_memory) . 
-                     ", Peak memory: " . $this->format_bytes($peak_memory) . 
-                     ", Memory increase: " . $this->format_bytes($final_memory - $initial_memory));
+                "Final memory: " . $this->format_bytes($final_memory) .
+                ", Peak memory: " . $this->format_bytes($peak_memory) .
+                ", Memory increase: " . $this->format_bytes($final_memory - $initial_memory));
 
             error_log("YouTube: Successfully formatted " . count($all_items) . " videos");
             return $all_items;
@@ -1237,7 +1277,8 @@ class YouTube extends AbstractPlatform {
     /**
      * Store video in cache with proper engagement data
      */
-    private function store_video_in_cache($video_data) {
+    private function store_video_in_cache($video_data)
+    {
         if (empty($video_data['id'])) {
             return false;
         }
@@ -1247,16 +1288,31 @@ class YouTube extends AbstractPlatform {
 
         // Ensure all required fields are present
         $required_fields = [
-            'id', 'type', 'title', 'description', 'media_url', 'thumbnail_url',
-            'original_url', 'created_at', 'updated_at', 'engagement', 'views',
-            'likes', 'comments', 'shares', 'author_name', 'author_avatar',
-            'author_profile', 'duration', 'metadata'
+            'id',
+            'type',
+            'title',
+            'description',
+            'media_url',
+            'thumbnail_url',
+            'original_url',
+            'created_at',
+            'updated_at',
+            'engagement',
+            'views',
+            'likes',
+            'comments',
+            'shares',
+            'author_name',
+            'author_avatar',
+            'author_profile',
+            'duration',
+            'metadata'
         ];
 
         foreach ($required_fields as $field) {
             if (!isset($video_data[$field])) {
                 error_log("YouTube: Missing required field {$field} for video {$video_data['id']}");
-                
+
                 // Set default values for missing fields
                 switch ($field) {
                     case 'engagement':
@@ -1285,7 +1341,7 @@ class YouTube extends AbstractPlatform {
 
         // Determine cache duration
         $cache_duration = $this->determine_cache_duration($video_data);
-        
+
         $data = [
             'platform' => 'youtube',
             'content_type' => $video_data['type'],
@@ -1324,10 +1380,10 @@ class YouTube extends AbstractPlatform {
                 $data,
                 ['%s', '%s', '%s', '%s', '%s', '%s', '%s']
             );
-            
+
             if ($result !== false) {
                 error_log("YouTube: Inserted new cache entry for video {$video_data['id']}");
-                
+
                 // CRITICAL FIX: Trigger notification for new video
                 try {
                     // Prepare content data for notification
@@ -1343,16 +1399,16 @@ class YouTube extends AbstractPlatform {
                         'author_name' => $video_data['author_name'] ?? '',
                         'created_at' => $video_data['created_at'] ?? current_time('mysql')
                     ];
-                    
+
                     // Send notification using the notification handler
                     $notification_sent = $this->notification_handler->notify_new_content($notification_content);
-                    
+
                     if ($notification_sent) {
                         error_log("YouTube: Successfully sent notification for new video {$video_data['id']}");
                     } else {
                         error_log("YouTube: Failed to send notification for new video {$video_data['id']}");
                     }
-                    
+
                 } catch (\Exception $e) {
                     error_log("YouTube: Error sending notification for new video {$video_data['id']}: " . $e->getMessage());
                     error_log("YouTube: Notification error trace: " . $e->getTraceAsString());
@@ -1372,7 +1428,8 @@ class YouTube extends AbstractPlatform {
      * @param string $type Content type (video/short)
      * @return array|null
      */
-    protected function format_feed_item($video, $type = 'video') {
+    protected function format_feed_item($video, $type = 'video')
+    {
         if (empty($video['snippet'])) {
             error_log('YouTube: Cannot format feed item - missing snippet data');
             return null;
@@ -1399,15 +1456,15 @@ class YouTube extends AbstractPlatform {
             'title' => $snippet['title'] ?? '',
             'description' => $snippet['description'] ?? '',
             'media_url' => $video_url,
-            'thumbnail_url' => $snippet['thumbnails']['high']['url'] ?? 
-                             ($snippet['thumbnails']['default']['url'] ?? ''),
+            'thumbnail_url' => $snippet['thumbnails']['high']['url'] ??
+                ($snippet['thumbnails']['default']['url'] ?? ''),
             'original_url' => $video_url,
             'created_at' => $snippet['publishedAt'] ?? current_time('mysql'),
             'updated_at' => current_time('mysql'),
             'engagement' => [
                 'views' => intval($statistics['viewCount'] ?? 0),
-            'likes' => intval($statistics['likeCount'] ?? 0),
-            'comments' => intval($statistics['commentCount'] ?? 0),
+                'likes' => intval($statistics['likeCount'] ?? 0),
+                'comments' => intval($statistics['commentCount'] ?? 0),
                 'shares' => 0
             ],
             'author_name' => $snippet['channelTitle'] ?? '',
@@ -1442,11 +1499,14 @@ class YouTube extends AbstractPlatform {
      * @param array $video Video data
      * @return string Category name
      */
-    private function get_video_category($video) {
+    private function get_video_category($video)
+    {
         // Check if title contains ቅዳሴ or የካቲት
-        if (!empty($video['snippet']['title']) &&
+        if (
+            !empty($video['snippet']['title']) &&
             (strpos($video['snippet']['title'], 'ቅዳሴ') !== false ||
-             strpos($video['snippet']['title'], 'የካቲት') !== false)) {
+                strpos($video['snippet']['title'], 'የካቲት') !== false)
+        ) {
             return 'liturgical';
         }
         return 'other';
@@ -1458,7 +1518,8 @@ class YouTube extends AbstractPlatform {
      * @param string $channel_id
      * @return string|null
      */
-    private function get_channel_avatar($channel_id) {
+    private function get_channel_avatar($channel_id)
+    {
         try {
             if (empty($channel_id)) {
                 error_log("YouTube: Cannot fetch avatar - empty channel ID");
@@ -1468,7 +1529,7 @@ class YouTube extends AbstractPlatform {
             // Check cache first with a longer duration (1 week)
             $cache_key = 'youtube_channel_avatar_' . $channel_id;
             $cached_data = get_transient($cache_key);
-            
+
             if ($cached_data !== false) {
                 error_log("YouTube: Using cached avatar for channel {$channel_id}: {$cached_data}");
                 return $cached_data;
@@ -1477,7 +1538,7 @@ class YouTube extends AbstractPlatform {
             // Check if we have enough quota before making the request
             if (!$this->check_quota('channels')) {
                 error_log("YouTube: Insufficient quota for fetching channel avatar");
-                
+
                 // If we're out of quota but have a stale cache, extend it
                 $stale_cache = get_transient('stale_' . $cache_key);
                 if ($stale_cache) {
@@ -1485,12 +1546,12 @@ class YouTube extends AbstractPlatform {
                     error_log("YouTube: Using stale cache for avatar due to quota limit");
                     return $stale_cache;
                 }
-                
+
                 return null;
             }
 
             error_log("YouTube: Fetching avatar for channel {$channel_id}");
-            
+
             $response = $this->make_api_request(
                 self::API_BASE_URL . '/channels',
                 [
@@ -1508,23 +1569,23 @@ class YouTube extends AbstractPlatform {
 
             // Get the highest quality avatar available
             $thumbnails = $response['items'][0]['snippet']['thumbnails'];
-            $avatar_url = $thumbnails['high']['url'] ?? 
-                         $thumbnails['medium']['url'] ?? 
-                         $thumbnails['default']['url'];
-            
+            $avatar_url = $thumbnails['high']['url'] ??
+                $thumbnails['medium']['url'] ??
+                $thumbnails['default']['url'];
+
             if (empty($avatar_url)) {
                 error_log("YouTube: No valid avatar URL found for channel {$channel_id}");
                 return null;
             }
 
             error_log("YouTube: Got avatar URL for channel {$channel_id}: {$avatar_url}");
-            
+
             // Cache for 1 week since channel avatars rarely change
             set_transient($cache_key, $avatar_url, WEEK_IN_SECONDS);
-            
+
             // Also store in stale cache for fallback
             set_transient('stale_' . $cache_key, $avatar_url, 2 * WEEK_IN_SECONDS);
-            
+
             error_log("YouTube: Cached avatar URL for channel {$channel_id}");
 
             return $avatar_url;
@@ -1532,14 +1593,14 @@ class YouTube extends AbstractPlatform {
         } catch (\Exception $e) {
             error_log("YouTube: Error fetching channel avatar: " . $e->getMessage());
             error_log("YouTube: Error trace: " . $e->getTraceAsString());
-            
+
             // Try to use stale cache in case of error
             $stale_cache = get_transient('stale_' . $cache_key);
             if ($stale_cache) {
                 error_log("YouTube: Using stale cache for avatar due to error");
                 return $stale_cache;
             }
-            
+
             return null;
         }
     }
@@ -1550,7 +1611,8 @@ class YouTube extends AbstractPlatform {
      * @param array $video Video data
      * @return bool
      */
-    private function is_short($video) {
+    private function is_short($video)
+    {
         if (empty($video['contentDetails']['duration'])) {
             return false;
         }
@@ -1559,7 +1621,7 @@ class YouTube extends AbstractPlatform {
         try {
             $duration = new \DateInterval($video['contentDetails']['duration']);
             $seconds = ($duration->h * 3600) + ($duration->i * 60) + $duration->s;
-            
+
             // YouTube Shorts are 60 seconds or less
             return $seconds <= 60;
         } catch (\Exception $e) {
@@ -1573,7 +1635,8 @@ class YouTube extends AbstractPlatform {
      * @param array $details
      * @return string
      */
-    private function get_stream_status_from_details($details) {
+    private function get_stream_status_from_details($details)
+    {
         if (empty($details)) {
             return 'ended';
         }
@@ -1590,7 +1653,7 @@ class YouTube extends AbstractPlatform {
             $scheduled_time = new \DateTime($details['scheduledStartTime']);
             $three_hours_after = clone $scheduled_time;
             $three_hours_after->modify('+3 hours');
-            
+
             if ($now > $three_hours_after) {
                 return 'ended';
             }
@@ -1601,7 +1664,7 @@ class YouTube extends AbstractPlatform {
             $start_time = new \DateTime($details['actualStartTime']);
             $three_hours_after = clone $start_time;
             $three_hours_after->modify('+3 hours');
-            
+
             if ($now > $three_hours_after) {
                 return 'ended';
             }
@@ -1611,17 +1674,17 @@ class YouTube extends AbstractPlatform {
         // Handle upcoming streams
         if (!empty($details['scheduledStartTime'])) {
             $scheduled_time = new \DateTime($details['scheduledStartTime']);
-            
+
             // If scheduled time is in the future, it's upcoming
             if ($scheduled_time > $now) {
-            return 'upcoming';
+                return 'upcoming';
             }
-            
+
             // If scheduled time has passed but we don't have an actualStartTime,
             // check if it's within the last 3 hours
             $three_hours_ago = clone $now;
             $three_hours_ago->modify('-3 hours');
-            
+
             if ($scheduled_time > $three_hours_ago) {
                 return 'live';
             }
@@ -1636,22 +1699,23 @@ class YouTube extends AbstractPlatform {
      * @param array $video_data Video data from YouTube API
      * @return bool|int False on failure, stream ID on success
      */
-    private function insert_new_stream($video_data) {
+    private function insert_new_stream($video_data)
+    {
         if (empty($video_data['id']) || empty($video_data['snippet'])) {
             return false;
         }
 
         global $wpdb;
         $table = $wpdb->prefix . 'social_feed_streams';
-        
+
         $streaming_details = $video_data['liveStreamingDetails'] ?? [];
         $status = $this->get_stream_status_from_details($streaming_details);
-        
+
         // Ensure we have both timestamps for liturgical videos
         if (empty($streaming_details['actualStartTime']) && !empty($streaming_details['scheduledStartTime'])) {
             $streaming_details['actualStartTime'] = $streaming_details['scheduledStartTime'];
         }
-        
+
         $data = [
             'platform' => 'youtube',
             'stream_id' => $video_data['id'],
@@ -1676,7 +1740,7 @@ class YouTube extends AbstractPlatform {
             'started_at' => $data['started_at'],
             'scheduled_for' => $data['scheduled_for']
         ]));
-        
+
         $format = [
             '%s', // platform
             '%s', // stream_id
@@ -1693,14 +1757,14 @@ class YouTube extends AbstractPlatform {
             '%s', // created_at
             '%s'  // updated_at
         ];
-        
+
         $result = $wpdb->insert($table, $data, $format);
-        
+
         if ($result === false) {
             error_log("YouTube: Failed to insert stream {$video_data['id']}: " . $wpdb->last_error);
             return false;
         }
-        
+
         error_log("YouTube: Successfully inserted new stream {$video_data['id']}");
         return $wpdb->insert_id;
     }
@@ -1712,17 +1776,18 @@ class YouTube extends AbstractPlatform {
      * @param array $video_data New video data from YouTube API
      * @return bool
      */
-    private function update_stream_status($existing_stream, $video_data) {
+    private function update_stream_status($existing_stream, $video_data)
+    {
         if (empty($existing_stream['id']) || empty($video_data['id'])) {
             return false;
         }
 
         global $wpdb;
         $table = $wpdb->prefix . 'social_feed_streams';
-        
+
         $streaming_details = $video_data['liveStreamingDetails'] ?? [];
         $status = $this->get_stream_status_from_details($streaming_details);
-        
+
         $data = [
             'title' => $video_data['snippet']['title'],
             'description' => $video_data['snippet']['description'],
@@ -1733,9 +1798,9 @@ class YouTube extends AbstractPlatform {
             'scheduled_for' => $streaming_details['scheduledStartTime'] ?? $existing_stream['scheduled_for'],
             'updated_at' => current_time('mysql')
         ];
-        
+
         $where = ['id' => $existing_stream['id']];
-        
+
         $format = [
             '%s', // title
             '%s', // description
@@ -1746,34 +1811,34 @@ class YouTube extends AbstractPlatform {
             '%s', // scheduled_for
             '%s'  // updated_at
         ];
-        
+
         $where_format = ['%d'];
-        
+
         $result = $wpdb->update($table, $data, $where, $format, $where_format);
-        
+
         if ($result === false) {
             error_log("YouTube: Failed to update stream {$existing_stream['id']}: " . $wpdb->last_error);
             return false;
         }
-        
+
         error_log("YouTube: Successfully updated stream {$existing_stream['id']} status to {$status}");
-        
+
         // If status changed, trigger notification
         if ($existing_stream['status'] !== $status) {
             $stream_data = array_merge($data, [
-                    'id' => $video_data['id'],
-                    'stream_url' => $existing_stream['stream_url'],
-                    'channel_name' => $existing_stream['channel_name'],
-                    'channel_id' => $existing_stream['channel_id']
+                'id' => $video_data['id'],
+                'stream_url' => $existing_stream['stream_url'],
+                'channel_name' => $existing_stream['channel_name'],
+                'channel_id' => $existing_stream['channel_id']
             ]);
-            
+
             $this->notification_handler->notify_stream_status_change(
                 $stream_data,
                 $existing_stream['status'],
                 $status
             );
         }
-        
+
         return true;
     }
 
@@ -1783,7 +1848,8 @@ class YouTube extends AbstractPlatform {
      * @param int $max_pages Maximum number of pages to fetch (each page has 50 items)
      * @return array
      */
-    private function get_shorts($max_pages = 5) {
+    private function get_shorts($max_pages = 5)
+    {
         $all_items = [];
         $next_page_token = null;
         $page_count = 0;
@@ -1791,10 +1857,10 @@ class YouTube extends AbstractPlatform {
 
         try {
             error_log("YouTube: Starting shorts fetch with max_pages: $max_pages");
-            
+
             // Use the same uploads playlist to find shorts
             $uploads_playlist_id = get_transient('youtube_uploads_playlist_' . $this->config['channel_id']);
-            
+
             if (!$uploads_playlist_id) {
                 error_log('YouTube: No uploads playlist ID available for shorts');
                 return [];
@@ -1840,13 +1906,13 @@ class YouTube extends AbstractPlatform {
                     foreach ($data['items'] as $item) {
                         if (!empty($item['snippet']['resourceId']['videoId'])) {
                             $published_at = strtotime($item['snippet']['publishedAt']);
-                            
+
                             // For initial fetch, get all videos
                             // For updates, only get videos from last 24 hours
                             if ($is_initial_fetch || $published_at >= strtotime('-24 hours')) {
                                 $video_ids[] = $item['snippet']['resourceId']['videoId'];
-                                error_log("YouTube: Added potential short ID: " . $item['snippet']['resourceId']['videoId'] . 
-                                        " published at " . $item['snippet']['publishedAt']);
+                                error_log("YouTube: Added potential short ID: " . $item['snippet']['resourceId']['videoId'] .
+                                    " published at " . $item['snippet']['publishedAt']);
                             }
                         }
                     }
@@ -1877,7 +1943,7 @@ class YouTube extends AbstractPlatform {
             if (!empty($video_ids)) {
                 $unique_ids = array_unique($video_ids);
                 $video_batches = array_chunk($unique_ids, 50);
-                
+
                 foreach ($video_batches as $batch) {
                     if (!$this->check_quota('videos')) {
                         error_log('YouTube: Insufficient quota for video details');
@@ -1921,7 +1987,8 @@ class YouTube extends AbstractPlatform {
      *
      * @return array
      */
-    private function get_live_broadcasts() {
+    private function get_live_broadcasts()
+    {
         $items = [];
         $video_ids = [];
 
@@ -1976,7 +2043,8 @@ class YouTube extends AbstractPlatform {
         }
     }
 
-    private function determine_cache_duration($video_data) {
+    private function determine_cache_duration($video_data)
+    {
         // If it's a live video
         if (!empty($video_data['duration']) && $video_data['duration'] === 'P0D') {
             return self::CACHE_DURATION['live'];

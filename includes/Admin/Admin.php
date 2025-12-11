@@ -2256,8 +2256,9 @@ class Admin {
 
         try {
             $stream_service = new \SocialFeed\Services\StreamService();
-            $stream_service->refresh_stream_statuses();
-            wp_send_json_success(['message' => 'Stream statuses refreshed successfully']);
+            $stream_service->check_new_streams(); // Check for NEW streams first
+            $stream_service->refresh_stream_statuses(); // Then update existing ones
+            wp_send_json_success(['message' => 'Streams refreshed successfully']);
         } catch (\Exception $e) {
             wp_send_json_error(['message' => 'Error refreshing streams: ' . $e->getMessage()]);
         }

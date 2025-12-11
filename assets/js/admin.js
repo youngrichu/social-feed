@@ -212,11 +212,10 @@
             
             $submit.prop('disabled', true);
 
-            // Re-enable submit button after 2 seconds - safer function reference
-            function enableSubmitButton() {
+            // Re-enable submit button after 2 seconds
+            setTimeout(function() {
                 $submit.prop('disabled', false);
-            }
-            setTimeout(enableSubmitButton, 2000);
+            }, 2000);
         });
 
         // Test platform connection
@@ -266,4 +265,4 @@
             });
         });
     }
-})(jQuery);
+})(jQuery); 

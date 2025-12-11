@@ -185,43 +185,43 @@
             const author = item.author;
 
             return `
-                <div class="feed-item" data-platform="${sanitizeHtml(item.platform)}" data-type="${sanitizeHtml(item.type)}" data-id="${sanitizeHtml(item.id)}">
+                <div class="feed-item" data-platform="${item.platform}" data-type="${item.type}" data-id="${item.id}">
                     <div class="feed-item-header">
                         <div class="author-info">
                             ${author.avatar ? 
-                                `<img src="${sanitizeUrl(author.avatar)}" alt="${sanitizeHtml(author.name)}" class="author-avatar">` : 
+                                `<img src="${author.avatar}" alt="${author.name}" class="author-avatar">` : 
                                 ''
                             }
                             <div class="author-details">
                                 ${author.name ? 
-                                    `<a href="${sanitizeUrl(author.profile_url)}" target="_blank" class="author-name">
-                                        ${sanitizeHtml(author.name)}
+                                    `<a href="${author.profile_url}" target="_blank" class="author-name">
+                                        ${author.name}
                                     </a>` : 
                                     ''
                                 }
                                 <span class="platform-badge">
-                                    ${sanitizeHtml(item.platform.charAt(0).toUpperCase() + item.platform.slice(1))}
+                                    ${item.platform.charAt(0).toUpperCase() + item.platform.slice(1)}
                                 </span>
                             </div>
                         </div>
-                        <time datetime="${sanitizeHtml(content.created_at)}" class="post-date">
-                            ${sanitizeHtml(timeSince(new Date(content.created_at)))} ago
+                        <time datetime="${content.created_at}" class="post-date">
+                            ${timeSince(new Date(content.created_at))} ago
                         </time>
                     </div>
                     <div class="feed-item-media">
                         ${item.type === 'video' || item.type === 'short' ?
                             `<div class="video-wrapper">
-                                <img src="${sanitizeUrl(content.thumbnail_url)}" alt="${sanitizeHtml(content.title)}">
-                                <a href="${sanitizeUrl(content.media_url)}" target="_blank" class="play-button">
+                                <img src="${content.thumbnail_url}" alt="${content.title}">
+                                <a href="${content.media_url}" target="_blank" class="play-button">
                                     <span class="dashicons dashicons-controls-play"></span>
                                 </a>
                             </div>` :
-                            `<img src="${sanitizeUrl(content.thumbnail_url)}" alt="${sanitizeHtml(content.title)}">`
+                            `<img src="${content.thumbnail_url}" alt="${content.title}">`
                         }
                     </div>
                     <div class="feed-item-content">
-                        <h4>${sanitizeHtml(content.title)}</h4>
-                        <p>${sanitizeHtml(truncateText(content.description, 20))}</p>
+                        <h4>${content.title}</h4>
+                        <p>${truncateText(content.description, 20)}</p>
                     </div>
                     <div class="feed-item-footer">
                         <div class="engagement">
@@ -238,7 +238,7 @@
                                 ''
                             }
                         </div>
-                        <a href="${sanitizeUrl(content.original_url)}" target="_blank" class="view-original">
+                        <a href="${content.original_url}" target="_blank" class="view-original">
                             View Original
                         </a>
                     </div>
@@ -275,15 +275,12 @@
             loadStreamItems(false);
         });
 
-        // Auto-refresh live streams - using safer interval implementation
-        function autoRefreshLiveStreams() {
+        // Auto-refresh live streams
+        setInterval(function() {
             if ($streams.find('.stream-item[data-status="live"]').length) {
                 loadStreamItems(true);
             }
-        }
-        
-        // Set up auto-refresh with proper function reference
-        const refreshInterval = setInterval(autoRefreshLiveStreams, 60000); // Every minute
+        }, 60000); // Every minute
 
         /**
          * Load stream items
@@ -356,9 +353,9 @@
          */
         function renderStreamItem(stream) {
             return `
-                <div class="stream-item" data-platform="${sanitizeHtml(stream.platform)}" data-status="${sanitizeHtml(stream.status)}">
+                <div class="stream-item" data-platform="${stream.platform}" data-status="${stream.status}">
                     <div class="stream-thumbnail">
-                        <img src="${sanitizeUrl(stream.thumbnail_url)}" alt="${sanitizeHtml(stream.title)}">
+                        <img src="${stream.thumbnail_url}" alt="${stream.title}">
                         ${stream.status === 'live' ?
                             `<span class="live-badge">LIVE</span>
                             <span class="viewer-count">
@@ -366,102 +363,33 @@
                             </span>` :
                             stream.status === 'upcoming' ?
                             `<span class="upcoming-badge">
-                                ${sanitizeHtml(timeSince(new Date(), new Date(stream.scheduled_for)))} until live
+                                ${timeSince(new Date(), new Date(stream.scheduled_for))} until live
                             </span>` :
                             ''
                         }
                     </div>
                     <div class="stream-info">
                         <div class="channel-info">
-                            <img src="${sanitizeUrl(stream.channel.avatar)}" alt="${sanitizeHtml(stream.channel.name)}" class="channel-avatar">
+                            <img src="${stream.channel.avatar}" alt="${stream.channel.name}" class="channel-avatar">
                             <span class="channel-name">
-                                ${sanitizeHtml(stream.channel.name)}
+                                ${stream.channel.name}
                             </span>
                             <span class="platform-badge">
-                                ${sanitizeHtml(stream.platform.charAt(0).toUpperCase() + stream.platform.slice(1))}
+                                ${stream.platform.charAt(0).toUpperCase() + stream.platform.slice(1)}
                             </span>
                         </div>
                         <h4 class="stream-title">
-                            <a href="${sanitizeUrl(stream.stream_url)}" target="_blank">
-                                ${sanitizeHtml(stream.title)}
+                            <a href="${stream.stream_url}" target="_blank">
+                                ${stream.title}
                             </a>
                         </h4>
                         <p class="stream-description">
-                            ${sanitizeHtml(truncateText(stream.description, 30))}
+                            ${truncateText(stream.description, 30)}
                         </p>
                     </div>
                 </div>
             `;
         }
-    }
-
-    /**
-     * Sanitize HTML content to prevent XSS attacks
-     *
-     * @param {string} str
-     * @returns {string}
-     */
-    function sanitizeHtml(str) {
-        if (typeof str !== 'string') {
-            return '';
-        }
-        
-        const entityMap = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;',
-            '/': '&#x2F;',
-            '`': '&#x60;',
-            '=': '&#x3D;'
-        };
-        
-        return str.replace(/[&<>"'`=\/]/g, function (s) {
-            return entityMap[s];
-        });
-    }
-
-    /**
-     * Validate and sanitize URLs to prevent malicious links
-     *
-     * @param {string} url
-     * @returns {string}
-     */
-    function sanitizeUrl(url) {
-        if (typeof url !== 'string') {
-            return '#';
-        }
-        
-        // Remove any potential javascript: or data: protocols
-        const cleanUrl = url.trim();
-        const lowerUrl = cleanUrl.toLowerCase();
-        
-        // Allow only http, https, and relative URLs
-        if (lowerUrl.startsWith('javascript:') || 
-            lowerUrl.startsWith('data:') || 
-            lowerUrl.startsWith('vbscript:') ||
-            lowerUrl.startsWith('file:') ||
-            lowerUrl.includes('<script') ||
-            lowerUrl.includes('javascript')) {
-            return '#';
-        }
-        
-        // If it's a relative URL or starts with http/https, it's probably safe
-        if (cleanUrl.startsWith('/') || 
-            cleanUrl.startsWith('./') || 
-            cleanUrl.startsWith('../') ||
-            cleanUrl.startsWith('http://') || 
-            cleanUrl.startsWith('https://')) {
-            return cleanUrl;
-        }
-        
-        // For other cases, prepend https:// if it looks like a domain
-        if (cleanUrl.includes('.') && !cleanUrl.includes(' ')) {
-            return 'https://' + cleanUrl;
-        }
-        
-        return '#';
     }
 
     /**
@@ -515,17 +443,9 @@
      * @returns {string}
      */
     function truncateText(text, words) {
-        // Safety check for input
-        if (typeof text !== 'string') {
-            return '';
-        }
-        
-        // Ensure words is a positive number
-        const wordLimit = Math.max(1, parseInt(words) || 20);
-        
         const array = text.trim().split(' ');
-        const ellipsis = array.length > wordLimit ? '...' : '';
-        return array.slice(0, wordLimit).join(' ') + ellipsis;
+        const ellipsis = array.length > words ? '...' : '';
+        return array.slice(0, words).join(' ') + ellipsis;
     }
 
     /**
@@ -584,23 +504,18 @@
                 isTransitioning = true;
                 const translateX = -(currentIndex * (100 / slidesToShowCurrent));
                 
-                // Safer timeout implementations with function references
-                function resetTransitionFlag() {
-                    isTransitioning = false;
-                }
-                
-                function resetTransitionWithClass() {
-                    $track.removeClass('no-transition');
-                    isTransitioning = false;
-                }
-                
                 if (animate) {
                     $track.css('transform', `translateX(${translateX}%)`);
-                    setTimeout(resetTransitionFlag, 500);
+                    setTimeout(() => {
+                        isTransitioning = false;
+                    }, 500);
                 } else {
                     $track.addClass('no-transition');
                     $track.css('transform', `translateX(${translateX}%)`);
-                    setTimeout(resetTransitionWithClass, 50);
+                    setTimeout(() => {
+                        $track.removeClass('no-transition');
+                        isTransitioning = false;
+                    }, 50);
                 }
 
                 // Update navigation buttons
@@ -679,16 +594,8 @@
                 startX = clientX;
                 
                 const transform = $track.css('transform');
-                // Safer manual CSS transform parsing instead of DOMMatrix
-                let startTransformValue = 0;
-                if (transform && transform !== 'none') {
-                    const matrixMatch = transform.match(/matrix\(([^)]+)\)/);
-                    if (matrixMatch) {
-                        const values = matrixMatch[1].split(',').map(v => parseFloat(v.trim()));
-                        startTransformValue = values[4] || 0; // translateX value (5th parameter)
-                    }
-                }
-                startTransform = startTransformValue;
+                const matrix = new DOMMatrix(transform);
+                startTransform = matrix.m41; // translateX value
                 
                 stopAutoplay();
             });
