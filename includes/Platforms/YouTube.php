@@ -58,7 +58,6 @@ class YouTube extends AbstractPlatform
     /**
      * @var PerformanceMonitor
      */
-    private $performance_monitor;
 
     /**
      * @var RequestOptimizer
@@ -90,7 +89,6 @@ class YouTube extends AbstractPlatform
         try {
             $this->content_processor = new ContentProcessor();
             $this->cache_manager = new CacheManager('youtube');
-            $this->performance_monitor = new PerformanceMonitor();
             $this->request_optimizer = new RequestOptimizer();
             $this->notification_handler = new NotificationHandler();
             $this->quota_manager = new QuotaManager();
@@ -166,7 +164,6 @@ class YouTube extends AbstractPlatform
      */
     public function check_new_videos()
     {
-        echo "YouTube: Starting check_new_videos()\n";
 
         // Check if platform is configured
         if (!$this->is_configured()) {
@@ -183,14 +180,12 @@ class YouTube extends AbstractPlatform
                 return false;
             }
 
-            error_log('YouTube: Found ' . count($videos) . ' videos');
 
             // Store videos in cache
             global $wpdb;
             $cache_table = $wpdb->prefix . 'social_feed_cache';
 
             foreach ($videos as $video) {
-                error_log('YouTube: Processing video: ' . json_encode($video));
 
                 // Check if video already exists
                 $exists = $wpdb->get_var($wpdb->prepare(
@@ -200,7 +195,6 @@ class YouTube extends AbstractPlatform
                 ));
 
                 if ($exists) {
-                    error_log('YouTube: Video already exists in cache: ' . $video['id']);
                     continue;
                 }
 
@@ -1026,7 +1020,6 @@ class YouTube extends AbstractPlatform
         ];
 
         update_option('youtube_quota_stats', $quota_stats);
-        error_log('YouTube: Quota usage reset');
 
         return true;
     }
@@ -1045,7 +1038,6 @@ class YouTube extends AbstractPlatform
         $video_ids = [];
 
         try {
-            error_log("YouTube: Starting video fetch with max_pages: $max_pages");
 
             // Get uploads playlist ID with longer cache duration
             $uploads_playlist_id = get_transient('youtube_uploads_playlist_' . $this->config['channel_id']);
@@ -1081,16 +1073,13 @@ class YouTube extends AbstractPlatform
                 'video'
             ));
 
-            error_log("YouTube: Found $cached_count cached videos");
 
             // For initial fetch, get all videos. For updates, only get recent ones
             $is_initial_fetch = ($cached_count == 0);
-            error_log("YouTube: " . ($is_initial_fetch ? "Performing initial fetch" : "Performing update fetch"));
 
             // For initial fetch, increase max_pages to get more historical content
             if ($is_initial_fetch) {
                 $max_pages = 20; // Fetch up to 1000 videos (20 pages × 50 videos per page)
-                error_log("YouTube: Initial fetch - increased max_pages to $max_pages to get historical content");
             }
 
             // STEP 1: Get all video IDs from the playlist
@@ -1111,11 +1100,9 @@ class YouTube extends AbstractPlatform
                     $params['pageToken'] = $next_page_token;
                 }
 
-                error_log("YouTube: Fetching page " . ($page_count + 1) . " from uploads playlist");
                 $data = $this->make_api_request(self::API_BASE_URL . '/playlistItems', $params, 'playlistItems');
 
                 if (!empty($data['items'])) {
-                    error_log("YouTube: Found " . count($data['items']) . " items on page " . ($page_count + 1));
                     foreach ($data['items'] as $item) {
                         if (!empty($item['snippet']['resourceId']['videoId'])) {
                             $published_at = strtotime($item['snippet']['publishedAt']);
@@ -1135,7 +1122,6 @@ class YouTube extends AbstractPlatform
                 // For initial fetch, continue until max_pages or no more results
                 // For updates, stop after first page if no recent videos
                 if (!$is_initial_fetch && empty($video_ids) && $page_count >= 1) {
-                    error_log("YouTube: No recent videos found, stopping fetch");
                     break;
                 }
 
@@ -1148,11 +1134,9 @@ class YouTube extends AbstractPlatform
 
             // If no video IDs found, return empty array
             if (empty($video_ids)) {
-                error_log("YouTube: No video IDs found to fetch details for");
                 return [];
             }
 
-            error_log("YouTube: Total unique video IDs found: " . count(array_unique($video_ids)));
 
             // STEP 2: Get complete video details in batches of 50 with memory optimization
             $unique_ids = array_unique($video_ids);
@@ -1163,8 +1147,6 @@ class YouTube extends AbstractPlatform
             $memory_limit = $this->get_memory_limit();
             $processed_count = 0;
 
-            error_log("YouTube: Starting batch processing. Initial memory: " . $this->format_bytes($initial_memory) .
-                ", Memory limit: " . $this->format_bytes($memory_limit));
 
             foreach ($video_batches as $batch_index => $batch) {
                 // Check memory usage before processing each batch
@@ -1199,8 +1181,6 @@ class YouTube extends AbstractPlatform
                     'key' => $this->config['api_key']
                 ];
 
-                error_log("YouTube: Processing batch " . ($batch_index + 1) . "/" . count($video_batches) .
-                    " (" . count($batch) . " videos) - Memory: " . $this->format_bytes($current_memory));
 
                 $batch_data = $this->make_api_request(self::API_BASE_URL . '/videos', $params, 'videos');
 
@@ -1232,7 +1212,6 @@ class YouTube extends AbstractPlatform
                             // Log progress every 50 videos
                             if ($processed_count % 50 === 0) {
                                 $current_memory = memory_get_usage(true);
-                                error_log("YouTube: Processed {$processed_count} videos - Memory: " . $this->format_bytes($current_memory));
                             }
                         }
 
@@ -1244,7 +1223,6 @@ class YouTube extends AbstractPlatform
                     unset($batch_data);
 
                 } else {
-                    error_log("YouTube: No items returned for batch of " . count($batch) . " videos");
                 }
 
                 // Clear batch from memory
@@ -1259,12 +1237,7 @@ class YouTube extends AbstractPlatform
             // Final memory usage report
             $final_memory = memory_get_usage(true);
             $peak_memory = memory_get_peak_usage(true);
-            error_log("YouTube: Batch processing complete. Processed {$processed_count} videos. " .
-                "Final memory: " . $this->format_bytes($final_memory) .
-                ", Peak memory: " . $this->format_bytes($peak_memory) .
-                ", Memory increase: " . $this->format_bytes($final_memory - $initial_memory));
 
-            error_log("YouTube: Successfully formatted " . count($all_items) . " videos");
             return $all_items;
 
         } catch (\Exception $e) {
@@ -1372,7 +1345,6 @@ class YouTube extends AbstractPlatform
                 ['%s', '%s', '%s'],
                 ['%d']
             );
-            error_log("YouTube: Updated cache for video {$video_data['id']}");
         } else {
             // Insert new entry
             $result = $wpdb->insert(
@@ -1382,7 +1354,6 @@ class YouTube extends AbstractPlatform
             );
 
             if ($result !== false) {
-                error_log("YouTube: Inserted new cache entry for video {$video_data['id']}");
 
                 // CRITICAL FIX: Trigger notification for new video
                 try {

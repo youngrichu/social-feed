@@ -1,7 +1,8 @@
 <?php
 namespace SocialFeed\Platforms;
 
-class TikTok extends AbstractPlatform {
+class TikTok extends AbstractPlatform
+{
     /**
      * @var string TikTok API base URL
      */
@@ -10,8 +11,10 @@ class TikTok extends AbstractPlatform {
     /**
      * Constructor
      */
-    public function __construct() {
+    public function __construct()
+    {
         $this->platform = 'tiktok';
+        parent::__construct();
     }
 
     /**
@@ -20,7 +23,8 @@ class TikTok extends AbstractPlatform {
      * @param array $types Content types to fetch
      * @return array
      */
-    public function get_feed($types = []) {
+    public function get_feed($types = [])
+    {
         if (!$this->is_configured()) {
             error_log('TikTok Feed: Not configured properly. Config: ' . json_encode($this->config));
             return [];
@@ -34,7 +38,6 @@ class TikTok extends AbstractPlatform {
 
         foreach ($types as $type) {
             try {
-                error_log("TikTok Feed: Fetching {$type}s");
                 switch ($type) {
                     case 'video':
                         $items = array_merge($items, $this->get_videos());
@@ -48,7 +51,6 @@ class TikTok extends AbstractPlatform {
             }
         }
 
-        error_log('TikTok Feed: Total items fetched: ' . count($items));
         return $items;
     }
 
@@ -58,7 +60,8 @@ class TikTok extends AbstractPlatform {
      * @param string $stream_id
      * @return array|null
      */
-    public function get_stream_status($stream_id) {
+    public function get_stream_status($stream_id)
+    {
         if (!$this->is_configured()) {
             return null;
         }
@@ -108,7 +111,8 @@ class TikTok extends AbstractPlatform {
      * @param array $config
      * @return bool
      */
-    public function validate_config($config) {
+    public function validate_config($config)
+    {
         return !empty($config['api_key']) && !empty($config['access_token']);
     }
 
@@ -117,7 +121,8 @@ class TikTok extends AbstractPlatform {
      *
      * @return array
      */
-    public function get_supported_types() {
+    public function get_supported_types()
+    {
         return ['video', 'live'];
     }
 
@@ -126,52 +131,50 @@ class TikTok extends AbstractPlatform {
      *
      * @return array
      */
-    private function get_videos() {
-        error_log('TikTok: Making request to fetch videos');
-        
+    private function get_videos()
+    {
+
         // Memory optimization: Track initial memory usage
         $initial_memory = memory_get_usage(true);
         $memory_limit = $this->get_memory_limit();
-        
-        error_log("TikTok: Starting video fetch. Initial memory: " . $this->format_bytes($initial_memory) . 
-                 ", Memory limit: " . $this->format_bytes($memory_limit));
-        
+
+
         try {
             $all_items = [];
             $cursor = null;
             $max_requests = 10; // Limit to prevent excessive API calls
             $request_count = 0;
-            
+
             do {
                 // Check memory usage before each request
                 $current_memory = memory_get_usage(true);
                 $memory_usage_percent = ($current_memory / $memory_limit) * 100;
-                
+
                 if ($memory_usage_percent > 80) {
                     error_log("TikTok: Memory usage at {$memory_usage_percent}% - implementing memory optimization");
-                    
+
                     // Force garbage collection
                     gc_collect_cycles();
-                    
+
                     // Check memory again after garbage collection
                     $current_memory = memory_get_usage(true);
                     $memory_usage_percent = ($current_memory / $memory_limit) * 100;
-                    
+
                     if ($memory_usage_percent > 85) {
                         error_log("TikTok: Memory usage still high at {$memory_usage_percent}% - stopping video fetch to prevent memory exhaustion");
                         break;
                     }
                 }
-                
+
                 $request_body = [
                     'fields' => ['id', 'title', 'cover_image_url', 'share_url', 'video_description', 'create_time', 'statistics'],
                     'max_count' => 20, // Process in smaller batches
                 ];
-                
+
                 if ($cursor) {
                     $request_body['cursor'] = $cursor;
                 }
-                
+
                 $response = $this->make_request(
                     self::API_BASE_URL . '/video/list/',
                     [
@@ -184,8 +187,7 @@ class TikTok extends AbstractPlatform {
                     ]
                 );
 
-                error_log("TikTok: Request " . ($request_count + 1) . " - Memory: " . $this->format_bytes($current_memory));
-                
+
                 if (!empty($response['data']['videos'])) {
                     // Process videos in streaming fashion to minimize memory footprint
                     foreach ($response['data']['videos'] as $video) {
@@ -204,48 +206,41 @@ class TikTok extends AbstractPlatform {
                             'author_avatar' => $video['author']['avatar_url'] ?? '',
                             'author_profile' => $video['author']['profile_url'] ?? '',
                         ], 'video');
-                        
+
                         if ($formatted_item) {
                             $all_items[] = $formatted_item;
                         }
-                        
+
                         // Clear video data from memory immediately after processing
                         unset($video, $formatted_item);
                     }
-                    
+
                     // Get cursor for next page if available
                     $cursor = $response['data']['cursor'] ?? null;
-                    
+
                     // Log progress every request
-                    error_log("TikTok: Processed " . count($response['data']['videos']) . " videos in request " . ($request_count + 1) . 
-                             ". Total items: " . count($all_items));
                 } else {
-                    error_log("TikTok: No videos found in response for request " . ($request_count + 1));
                     break;
                 }
-                
+
                 // Clear response data from memory
                 unset($response);
-                
+
                 $request_count++;
-                
+
                 // Periodic garbage collection every 3 requests
                 if ($request_count % 3 === 0) {
                     gc_collect_cycles();
                 }
-                
+
             } while ($cursor && $request_count < $max_requests);
-            
+
             // Final memory usage report
             $final_memory = memory_get_usage(true);
             $peak_memory = memory_get_peak_usage(true);
-            error_log("TikTok: Video fetch complete. Processed " . count($all_items) . " videos in {$request_count} requests. " .
-                     "Final memory: " . $this->format_bytes($final_memory) . 
-                     ", Peak memory: " . $this->format_bytes($peak_memory) . 
-                     ", Memory increase: " . $this->format_bytes($final_memory - $initial_memory));
 
             return $all_items;
-            
+
         } catch (\Exception $e) {
             error_log('TikTok API Error: ' . $e->getMessage());
             throw $e;
@@ -257,7 +252,8 @@ class TikTok extends AbstractPlatform {
      *
      * @return array
      */
-    private function get_live_broadcasts() {
+    private function get_live_broadcasts()
+    {
         try {
             $response = $this->make_request(
                 self::API_BASE_URL . '/live/list/',
@@ -308,7 +304,8 @@ class TikTok extends AbstractPlatform {
      * @param array $details
      * @return string
      */
-    private function get_stream_status_from_details($details) {
+    private function get_stream_status_from_details($details)
+    {
         if (empty($details['status'])) {
             return 'ended';
         }
@@ -328,18 +325,19 @@ class TikTok extends AbstractPlatform {
      *
      * @return int
      */
-    private function get_memory_limit() {
+    private function get_memory_limit()
+    {
         $memory_limit = ini_get('memory_limit');
-        
+
         if ($memory_limit === '-1') {
             // No memory limit
             return PHP_INT_MAX;
         }
-        
+
         // Convert memory limit to bytes
         $unit = strtolower(substr($memory_limit, -1));
         $value = (int) substr($memory_limit, 0, -1);
-        
+
         switch ($unit) {
             case 'g':
                 $value *= 1024 * 1024 * 1024;
@@ -351,7 +349,7 @@ class TikTok extends AbstractPlatform {
                 $value *= 1024;
                 break;
         }
-        
+
         return $value;
     }
 
@@ -361,14 +359,15 @@ class TikTok extends AbstractPlatform {
      * @param int $bytes
      * @return string
      */
-    private function format_bytes($bytes) {
+    private function format_bytes($bytes)
+    {
         $units = ['B', 'KB', 'MB', 'GB'];
         $bytes = max($bytes, 0);
         $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
         $pow = min($pow, count($units) - 1);
-        
+
         $bytes /= (1 << (10 * $pow));
-        
+
         return round($bytes, 2) . ' ' . $units[$pow];
     }
 
@@ -381,15 +380,16 @@ class TikTok extends AbstractPlatform {
      * @return array
      * @throws \Exception
      */
-    protected function make_request($url, $args = [], $max_retries = 3) {
+    protected function make_request($url, $args = [], $max_retries = 3)
+    {
         error_log('TikTok API Request: ' . $url . ' with args: ' . json_encode($args['body'] ?? []));
-        
+
         // Add TikTok-specific API key to headers before calling parent
         if (!isset($args['headers'])) {
             $args['headers'] = [];
         }
         $args['headers']['X-API-KEY'] = $this->config['api_key'];
-        
+
         // Use parent class retry logic with TikTok-specific headers
         return parent::make_request($url, $args, $max_retries);
     }
