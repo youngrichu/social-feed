@@ -31,9 +31,10 @@ class FeedService
      * @param int $per_page Items per page
      * @param string $sort Sort field
      * @param string $order Sort order
+     * @param array $args Additional arguments (e.g., playlist filter)
      * @return array
      */
-    public function get_feeds($platforms = [], $types = [], $page = 1, $per_page = 12, $sort = 'date', $order = 'desc')
+    public function get_feeds($platforms = [], $types = [], $page = 1, $per_page = 12, $sort = 'date', $order = 'desc', $args = [])
     {
 
         try {
@@ -98,7 +99,7 @@ class FeedService
                 $platform_errors = [];
 
                 // Use parallel processing for concurrent platform fetching
-                $fetch_results = $this->fetch_platforms_parallel($platforms, $types);
+                $fetch_results = $this->fetch_platforms_parallel($platforms, $types, $args);
 
                 foreach ($fetch_results as $platform => $result) {
                     if ($result['status'] === 'error') {
@@ -320,9 +321,10 @@ class FeedService
      *
      * @param array $platforms List of platforms to fetch from
      * @param array $types Content types to fetch
+     * @param array $args Additional arguments (e.g., playlist filter)
      * @return array Results indexed by platform name
      */
-    private function fetch_platforms_parallel($platforms, $types)
+    private function fetch_platforms_parallel($platforms, $types, $args = [])
     {
         $results = [];
         $start_time = microtime(true);
@@ -358,7 +360,7 @@ class FeedService
                 $original_timeout = ini_get('max_execution_time');
                 set_time_limit(30); // 30 seconds per platform
 
-                $platform_items = $platform_handler->get_feed($types);
+                $platform_items = $platform_handler->get_feed($types, $args);
 
                 // Restore original timeout
                 set_time_limit($original_timeout);

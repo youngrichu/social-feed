@@ -1,7 +1,8 @@
 <?php
 namespace SocialFeed\Core;
 
-class QuotaManager {
+class QuotaManager
+{
     /**
      * YouTube API quota limits
      */
@@ -10,14 +11,15 @@ class QuotaManager {
         'search' => 100,
         'videos' => 1,
         'channels' => 1,
-        'playlistItems' => 1
+        'playlistItems' => 1,
+        'playlists' => 1
     ];
 
     /**
      * Operation priorities
      */
     const OPERATION_PRIORITY = [
-        'high' => ['videos', 'playlistItems'],  // Essential operations
+        'high' => ['videos', 'playlistItems', 'playlists'],  // Essential operations
         'medium' => ['channels'],               // Important but not critical
         'low' => ['search']                     // Resource-intensive operations
     ];
@@ -49,7 +51,8 @@ class QuotaManager {
      *
      * @return int
      */
-    public function get_current_usage() {
+    public function get_current_usage()
+    {
         $quota_key = 'youtube_quota_usage_' . date('Y-m-d');
         return get_transient($quota_key) ?: 0;
     }
@@ -60,7 +63,8 @@ class QuotaManager {
      * @param string $operation
      * @return bool
      */
-    public function check_quota($operation) {
+    public function check_quota($operation)
+    {
         $today = date('Y-m-d');
         $quota_key = 'youtube_quota_usage_' . $today;
         $quota_exceeded_key = 'youtube_quota_exceeded_' . $today;
@@ -73,13 +77,13 @@ class QuotaManager {
         }
 
         // Get current quota usage and stats
-        $current_usage = (int)get_transient($quota_key) ?: 0;
+        $current_usage = (int) get_transient($quota_key) ?: 0;
         $operation_cost = self::QUOTA_COSTS[$operation] ?? 1;
         $quota_stats = get_option($quota_stats_key, ['operations' => []]);
 
         // Get operation priority
         $priority = $this->get_operation_priority($operation);
-        
+
         // Calculate quota percentage
         $quota_percentage = ($current_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
 
@@ -114,7 +118,7 @@ class QuotaManager {
         // Update quota usage and stats
         $new_usage = $current_usage + $operation_cost;
         set_transient($quota_key, $new_usage, DAY_IN_SECONDS);
-        
+
         // Update operation statistics
         $quota_stats['operations'][$operation] = ($quota_stats['operations'][$operation] ?? 0) + 1;
         $quota_stats['last_update'] = current_time('mysql');
@@ -125,7 +129,7 @@ class QuotaManager {
         $this->store_historical_usage($operation, $operation_cost);
 
         error_log("YouTube: Updated quota usage to $new_usage units for $today (Operation: $operation, Priority: $priority)");
-        
+
         return true;
     }
 
@@ -135,7 +139,8 @@ class QuotaManager {
      * @param string $operation
      * @return string
      */
-    public function get_operation_priority($operation) {
+    public function get_operation_priority($operation)
+    {
         foreach (self::OPERATION_PRIORITY as $priority => $operations) {
             if (in_array($operation, $operations)) {
                 return $priority;
@@ -149,25 +154,26 @@ class QuotaManager {
      *
      * @return bool
      */
-    public function reset_quota() {
+    public function reset_quota()
+    {
         $today = date('Y-m-d');
         $quota_key = 'youtube_quota_usage_' . $today;
         $quota_exceeded_key = 'youtube_quota_exceeded_' . $today;
         $quota_stats_key = 'youtube_quota_stats_' . $today;
-        
+
         delete_transient($quota_key);
         delete_transient($quota_exceeded_key);
-        
+
         $quota_stats = [
             'usage' => 0,
             'operations' => [],
             'reset_at' => current_time('mysql'),
             'last_update' => current_time('mysql')
         ];
-        
+
         update_option($quota_stats_key, $quota_stats);
         error_log('YouTube: Quota usage reset for ' . $today);
-        
+
         return true;
     }
 
@@ -176,7 +182,8 @@ class QuotaManager {
      *
      * @return float
      */
-    public function get_quota_usage_percentage() {
+    public function get_quota_usage_percentage()
+    {
         $current_usage = $this->get_current_usage();
         return ($current_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
     }
@@ -186,7 +193,8 @@ class QuotaManager {
      *
      * @return int
      */
-    public function get_remaining_quota() {
+    public function get_remaining_quota()
+    {
         $current_usage = $this->get_current_usage();
         return self::QUOTA_LIMIT_PER_DAY - $current_usage;
     }
@@ -196,7 +204,8 @@ class QuotaManager {
      *
      * @return array
      */
-    public function get_detailed_stats() {
+    public function get_detailed_stats()
+    {
         $today = date('Y-m-d');
         $quota_stats_key = 'youtube_quota_stats_' . $today;
         $stats = get_option($quota_stats_key, [
@@ -229,7 +238,8 @@ class QuotaManager {
      * @param float $percentage
      * @return string
      */
-    private function get_quota_status($percentage) {
+    private function get_quota_status($percentage)
+    {
         if ($percentage >= self::QUOTA_THRESHOLDS['critical']) {
             return 'critical';
         } elseif ($percentage >= self::QUOTA_THRESHOLDS['high']) {
@@ -246,7 +256,8 @@ class QuotaManager {
      * @param array $operations Array of operations to estimate cost for
      * @return array Estimated cost and whether it's safe to proceed
      */
-    public function estimate_quota_cost($operations) {
+    public function estimate_quota_cost($operations)
+    {
         $total_cost = 0;
         foreach ($operations as $operation) {
             $total_cost += self::QUOTA_COSTS[$operation] ?? 1;
@@ -269,28 +280,29 @@ class QuotaManager {
      * @param string $operation
      * @param int $cost
      */
-    private function store_historical_usage($operation, $cost) {
+    private function store_historical_usage($operation, $cost)
+    {
         $historical_key = 'youtube_quota_historical';
         $historical_data = get_option($historical_key, []);
-        
+
         $today = date('Y-m-d');
         $hour = date('H');
-        
+
         if (!isset($historical_data[$today])) {
             $historical_data[$today] = [];
         }
-        
+
         if (!isset($historical_data[$today][$hour])) {
             $historical_data[$today][$hour] = [
                 'total_usage' => 0,
                 'operations' => []
             ];
         }
-        
+
         $historical_data[$today][$hour]['total_usage'] += $cost;
-        $historical_data[$today][$hour]['operations'][$operation] = 
+        $historical_data[$today][$hour]['operations'][$operation] =
             ($historical_data[$today][$hour]['operations'][$operation] ?? 0) + 1;
-        
+
         // Keep only last 30 days of data
         $cutoff_date = date('Y-m-d', strtotime('-' . self::HISTORICAL_DAYS . ' days'));
         foreach ($historical_data as $date => $data) {
@@ -298,7 +310,7 @@ class QuotaManager {
                 unset($historical_data[$date]);
             }
         }
-        
+
         update_option($historical_key, $historical_data);
     }
 
@@ -307,27 +319,28 @@ class QuotaManager {
      *
      * @return array
      */
-    public function get_usage_predictions() {
+    public function get_usage_predictions()
+    {
         if (!empty($this->prediction_cache)) {
             return $this->prediction_cache;
         }
 
         $historical_data = get_option('youtube_quota_historical', []);
-        $current_hour = (int)date('H');
+        $current_hour = (int) date('H');
         $current_usage = $this->get_current_usage();
-        
+
         // Calculate average hourly usage patterns
         $hourly_patterns = $this->calculate_hourly_patterns($historical_data);
-        
+
         // Predict end-of-day usage
         $predicted_eod_usage = $current_usage;
         for ($hour = $current_hour + 1; $hour < 24; $hour++) {
             $predicted_eod_usage += $hourly_patterns[$hour] ?? 0;
         }
-        
+
         // Calculate confidence based on data availability
         $confidence = $this->calculate_prediction_confidence($historical_data);
-        
+
         $predictions = [
             'end_of_day_usage' => $predicted_eod_usage,
             'end_of_day_percentage' => ($predicted_eod_usage / self::QUOTA_LIMIT_PER_DAY) * 100,
@@ -336,7 +349,7 @@ class QuotaManager {
             'recommended_actions' => $this->get_recommended_actions($predicted_eod_usage),
             'hourly_forecast' => $this->get_hourly_forecast($current_hour, $hourly_patterns)
         ];
-        
+
         $this->prediction_cache = $predictions;
         return $predictions;
     }
@@ -347,15 +360,16 @@ class QuotaManager {
      * @param array $historical_data
      * @return array
      */
-    private function calculate_hourly_patterns($historical_data) {
+    private function calculate_hourly_patterns($historical_data)
+    {
         $hourly_totals = array_fill(0, 24, 0);
         $hourly_counts = array_fill(0, 24, 0);
-        
+
         foreach ($historical_data as $date => $day_data) {
             foreach ($day_data as $hour => $hour_data) {
                 // Convert hour string to integer to handle leading zeros (e.g., "07" -> 7)
-                $hour_int = (int)$hour;
-                
+                $hour_int = (int) $hour;
+
                 // Validate hour is within expected range
                 if ($hour_int >= 0 && $hour_int < 24 && isset($hour_data['total_usage'])) {
                     $hourly_totals[$hour_int] += $hour_data['total_usage'];
@@ -363,15 +377,15 @@ class QuotaManager {
                 }
             }
         }
-        
+
         // Calculate averages
         $hourly_patterns = [];
         for ($hour = 0; $hour < 24; $hour++) {
-            $hourly_patterns[$hour] = $hourly_counts[$hour] > 0 
-                ? $hourly_totals[$hour] / $hourly_counts[$hour] 
+            $hourly_patterns[$hour] = $hourly_counts[$hour] > 0
+                ? $hourly_totals[$hour] / $hourly_counts[$hour]
                 : 0;
         }
-        
+
         return $hourly_patterns;
     }
 
@@ -381,10 +395,11 @@ class QuotaManager {
      * @param array $historical_data
      * @return float
      */
-    private function calculate_prediction_confidence($historical_data) {
+    private function calculate_prediction_confidence($historical_data)
+    {
         $total_days = count($historical_data);
         $max_confidence_days = 14; // Need at least 2 weeks for high confidence
-        
+
         if ($total_days >= $max_confidence_days) {
             return 0.9;
         } elseif ($total_days >= 7) {
@@ -402,9 +417,10 @@ class QuotaManager {
      * @param int $predicted_usage
      * @return string
      */
-    private function assess_risk_level($predicted_usage) {
+    private function assess_risk_level($predicted_usage)
+    {
         $percentage = ($predicted_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
-        
+
         if ($percentage >= 95) {
             return 'critical';
         } elseif ($percentage >= 85) {
@@ -422,10 +438,11 @@ class QuotaManager {
      * @param int $predicted_usage
      * @return array
      */
-    private function get_recommended_actions($predicted_usage) {
+    private function get_recommended_actions($predicted_usage)
+    {
         $percentage = ($predicted_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
         $actions = [];
-        
+
         if ($percentage >= 95) {
             $actions[] = 'Immediately restrict all non-essential operations';
             $actions[] = 'Enable emergency quota conservation mode';
@@ -442,7 +459,7 @@ class QuotaManager {
             $actions[] = 'Continue normal operations';
             $actions[] = 'Monitor for unusual usage spikes';
         }
-        
+
         return $actions;
     }
 
@@ -453,14 +470,15 @@ class QuotaManager {
      * @param array $hourly_patterns
      * @return array
      */
-    private function get_hourly_forecast($current_hour, $hourly_patterns) {
+    private function get_hourly_forecast($current_hour, $hourly_patterns)
+    {
         $forecast = [];
         $cumulative_usage = $this->get_current_usage();
-        
+
         for ($hour = $current_hour + 1; $hour < 24; $hour++) {
             $predicted_usage = $hourly_patterns[$hour] ?? 0;
             $cumulative_usage += $predicted_usage;
-            
+
             $forecast[] = [
                 'hour' => $hour,
                 'predicted_usage' => $predicted_usage,
@@ -468,7 +486,7 @@ class QuotaManager {
                 'percentage' => ($cumulative_usage / self::QUOTA_LIMIT_PER_DAY) * 100
             ];
         }
-        
+
         return $forecast;
     }
 
@@ -479,19 +497,20 @@ class QuotaManager {
      * @param int $current_usage
      * @return bool
      */
-    private function is_operation_within_predicted_budget($operation, $current_usage) {
+    private function is_operation_within_predicted_budget($operation, $current_usage)
+    {
         $predictions = $this->get_usage_predictions();
         $operation_cost = self::QUOTA_COSTS[$operation] ?? 1;
-        
+
         // If confidence is low, allow operation
         if ($predictions['confidence'] < self::PREDICTION_ACCURACY_THRESHOLD) {
             return true;
         }
-        
+
         // Check if adding this operation would push us over the safe threshold
         $safe_threshold = self::QUOTA_LIMIT_PER_DAY * (1 - self::QUOTA_BUFFER_PERCENTAGE / 100);
         $predicted_with_operation = $predictions['end_of_day_usage'] + $operation_cost;
-        
+
         return $predicted_with_operation <= $safe_threshold;
     }
 
@@ -500,17 +519,18 @@ class QuotaManager {
      *
      * @return array
      */
-    public function get_historical_analysis() {
+    public function get_historical_analysis()
+    {
         $historical_data = get_option('youtube_quota_historical', []);
-        
+
         if (empty($historical_data)) {
             return ['message' => 'Insufficient historical data for analysis'];
         }
-        
+
         $daily_totals = [];
         $peak_hours = [];
         $operation_trends = [];
-        
+
         foreach ($historical_data as $date => $day_data) {
             $daily_total = 0;
             foreach ($day_data as $hour => $hour_data) {
@@ -518,15 +538,15 @@ class QuotaManager {
                 if (!is_array($hour_data) || !isset($hour_data['total_usage'])) {
                     continue;
                 }
-                
+
                 $daily_total += $hour_data['total_usage'];
-                
+
                 // Track peak hours
                 if (!isset($peak_hours[$hour])) {
                     $peak_hours[$hour] = 0;
                 }
                 $peak_hours[$hour] += $hour_data['total_usage'];
-                
+
                 // Track operation trends
                 if (isset($hour_data['operations']) && is_array($hour_data['operations'])) {
                     foreach ($hour_data['operations'] as $operation => $count) {
@@ -539,7 +559,7 @@ class QuotaManager {
             }
             $daily_totals[] = $daily_total;
         }
-        
+
         return [
             'average_daily_usage' => !empty($daily_totals) ? array_sum($daily_totals) / count($daily_totals) : 0,
             'peak_usage_day' => !empty($daily_totals) ? max($daily_totals) : 0,
@@ -557,16 +577,17 @@ class QuotaManager {
      * @param array $daily_totals
      * @return string
      */
-    private function calculate_usage_trend($daily_totals) {
+    private function calculate_usage_trend($daily_totals)
+    {
         if (count($daily_totals) < 7) {
             return 'insufficient_data';
         }
-        
+
         $recent_avg = array_sum(array_slice($daily_totals, -7)) / 7;
         $older_avg = array_sum(array_slice($daily_totals, 0, 7)) / 7;
-        
+
         $change_percentage = (($recent_avg - $older_avg) / $older_avg) * 100;
-        
+
         if ($change_percentage > 10) {
             return 'increasing';
         } elseif ($change_percentage < -10) {
@@ -582,10 +603,11 @@ class QuotaManager {
      * @param array $daily_totals
      * @return float
      */
-    private function calculate_efficiency_score($daily_totals) {
+    private function calculate_efficiency_score($daily_totals)
+    {
         $avg_usage = array_sum($daily_totals) / count($daily_totals);
         $utilization_rate = ($avg_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
-        
+
         // Optimal utilization is around 60-80%
         if ($utilization_rate >= 60 && $utilization_rate <= 80) {
             return 1.0; // Perfect efficiency
@@ -601,27 +623,28 @@ class QuotaManager {
      *
      * @return array
      */
-    public function get_optimization_suggestions() {
+    public function get_optimization_suggestions()
+    {
         $analysis = $this->get_historical_analysis();
         $predictions = $this->get_usage_predictions();
         $suggestions = [];
-        
+
         if (isset($analysis['efficiency_score']) && $analysis['efficiency_score'] < 0.7) {
             $suggestions[] = 'Consider optimizing API request patterns to improve efficiency';
         }
-        
+
         if (isset($analysis['usage_trend']) && $analysis['usage_trend'] === 'increasing') {
             $suggestions[] = 'Usage trend is increasing - consider implementing more aggressive caching';
         }
-        
+
         if ($predictions['risk_level'] === 'high' || $predictions['risk_level'] === 'critical') {
             $suggestions[] = 'High quota risk detected - enable predictive quota conservation';
         }
-        
+
         if (isset($analysis['peak_hours']) && count($analysis['peak_hours']) <= 2) {
             $suggestions[] = 'Consider distributing API requests more evenly throughout the day';
         }
-        
+
         return $suggestions;
     }
 
@@ -630,10 +653,11 @@ class QuotaManager {
      *
      * @return bool
      */
-    public function enable_quota_conservation() {
+    public function enable_quota_conservation()
+    {
         $conservation_key = 'youtube_quota_conservation_' . date('Y-m-d');
         set_transient($conservation_key, true, DAY_IN_SECONDS);
-        
+
         error_log('YouTube: Predictive quota conservation mode enabled');
         return true;
     }
@@ -643,8 +667,9 @@ class QuotaManager {
      *
      * @return bool
      */
-    public function is_quota_conservation_active() {
+    public function is_quota_conservation_active()
+    {
         $conservation_key = 'youtube_quota_conservation_' . date('Y-m-d');
-        return (bool)get_transient($conservation_key);
+        return (bool) get_transient($conservation_key);
     }
 }

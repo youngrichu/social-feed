@@ -6,7 +6,8 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
 
-class RestAPI {
+class RestAPI
+{
     /**
      * API namespace
      */
@@ -15,7 +16,8 @@ class RestAPI {
     /**
      * Register REST API routes
      */
-    public function register_routes() {
+    public function register_routes()
+    {
         // Combined feed endpoint
         register_rest_route(self::API_NAMESPACE, '/feeds', [
             [
@@ -32,6 +34,11 @@ class RestAPI {
                         'type' => 'array',
                         'items' => ['type' => 'string'],
                         'required' => false,
+                    ],
+                    'playlist' => [
+                        'type' => 'string',
+                        'required' => false,
+                        'description' => 'Filter videos by playlist ID',
                     ],
                     'page' => [
                         'type' => 'integer',
@@ -53,6 +60,23 @@ class RestAPI {
                         'type' => 'string',
                         'default' => 'desc',
                         'enum' => ['asc', 'desc'],
+                    ],
+                ],
+            ],
+        ]);
+
+        // Playlists endpoint
+        register_rest_route(self::API_NAMESPACE, '/playlists', [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => [$this, 'get_playlists'],
+                'permission_callback' => [$this, 'check_authorization'],
+                'args' => [
+                    'platform' => [
+                        'type' => 'string',
+                        'required' => false,
+                        'default' => 'youtube',
+                        'description' => 'Platform to fetch playlists from',
                     ],
                 ],
             ],
@@ -140,7 +164,8 @@ class RestAPI {
      * @param WP_REST_Request $request
      * @return bool|WP_Error
      */
-    public function check_authorization($request) {
+    public function check_authorization($request)
+    {
         // Check for JWT token
         $auth_header = $request->get_header('Authorization');
         if (!$auth_header || strpos($auth_header, 'Bearer ') !== 0) {
@@ -203,18 +228,26 @@ class RestAPI {
      * @param WP_REST_Request $request
      * @return WP_REST_Response|WP_Error
      */
-    public function get_feeds($request) {
+    public function get_feeds($request)
+    {
         try {
             $params = $request->get_params();
             $feed_service = new \SocialFeed\Services\FeedService();
-            
+
+            // Build args array for additional filters
+            $args = [];
+            if (!empty($params['playlist'])) {
+                $args['playlist'] = $params['playlist'];
+            }
+
             $result = $feed_service->get_feeds(
                 $params['platform'] ?? [],
                 $params['type'] ?? [],
                 $params['page'],
                 $params['per_page'],
                 $params['sort'],
-                $params['order']
+                $params['order'],
+                $args
             );
 
             return new WP_REST_Response($result);
@@ -229,16 +262,56 @@ class RestAPI {
     }
 
     /**
+     * Get playlists
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    public function get_playlists($request)
+    {
+        try {
+            $params = $request->get_params();
+            $platform = $params['platform'] ?? 'youtube';
+
+            $platform_factory = new \SocialFeed\Platforms\PlatformFactory();
+            $platform_handler = $platform_factory->get_platform($platform);
+
+            if (!$platform_handler) {
+                return new WP_Error(
+                    'platform_not_found',
+                    'Platform not found or not enabled',
+                    ['status' => 404]
+                );
+            }
+
+            $playlists = $platform_handler->get_playlists();
+
+            return new WP_REST_Response([
+                'status' => 'success',
+                'data' => $playlists,
+            ]);
+        } catch (\Exception $e) {
+            error_log('Social Feed API Playlists Error: ' . $e->getMessage());
+            return new WP_Error(
+                'rest_error',
+                $e->getMessage(),
+                ['status' => 500]
+            );
+        }
+    }
+
+    /**
      * Get live streams
      *
      * @param WP_REST_Request $request
      * @return WP_REST_Response|WP_Error
      */
-    public function get_live_streams($request) {
+    public function get_live_streams($request)
+    {
         try {
             $params = $request->get_params();
             $stream_service = new \SocialFeed\Services\StreamService();
-            
+
             $streams = $stream_service->get_streams(
                 $params['platform'] ?? [],
                 $params['status'] ?? null,
@@ -265,11 +338,12 @@ class RestAPI {
      * @param WP_REST_Request $request
      * @return WP_REST_Response|WP_Error
      */
-    public function register_device($request) {
+    public function register_device($request)
+    {
         try {
             $params = $request->get_params();
             $user_id = get_current_user_id();
-            
+
             $notifications = new \SocialFeed\Core\Notifications();
             $result = $notifications->register_device(
                 $user_id,
@@ -305,11 +379,12 @@ class RestAPI {
      * @param WP_REST_Request $request
      * @return WP_REST_Response|WP_Error
      */
-    public function unregister_device($request) {
+    public function unregister_device($request)
+    {
         try {
             $params = $request->get_params();
             $user_id = get_current_user_id();
-            
+
             $notifications = new \SocialFeed\Core\Notifications();
             $result = $notifications->unregister_device(
                 $user_id,
@@ -336,4 +411,4 @@ class RestAPI {
             );
         }
     }
-} 
+}

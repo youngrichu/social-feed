@@ -573,12 +573,25 @@ class YouTube extends AbstractPlatform
     /**
      * Enhanced content fetching with performance monitoring
      */
-    public function get_feed($types = [], $max_pages = 5)
+    public function get_feed($types = [], $args = [])
     {
         try {
             $start_time = microtime(true);
             $feed_items = [];
             $fetched_types = [];
+
+            // Extract args
+            $max_pages = $args['max_pages'] ?? 5;
+            $playlist_id = $args['playlist'] ?? null;
+
+            // If a specific playlist is requested, fetch from that playlist
+            if ($playlist_id) {
+                error_log('YouTube: Fetching feed for specific playlist: ' . $playlist_id);
+                $feed_items = $this->get_playlist_items($playlist_id, $max_pages);
+                error_log('YouTube: Fetched ' . count($feed_items) . ' items from playlist in ' .
+                    (microtime(true) - $start_time) . ' seconds');
+                return $feed_items;
+            }
 
             // Determine which content types to fetch
             $fetch_types = empty($types) ? $this->get_supported_types() : array_intersect($types, $this->get_supported_types());
@@ -612,6 +625,7 @@ class YouTube extends AbstractPlatform
             return [];
         }
     }
+
 
     /**
      * Standardize all cached videos to ensure consistent structure
@@ -2029,5 +2043,166 @@ class YouTube extends AbstractPlatform
 
         // Otherwise it's a historical video
         return self::CACHE_DURATION['historical'];
+    }
+
+    /**
+     * Get available playlists from the YouTube channel
+     *
+     * @return array List of playlists with id, title, and thumbnail
+     */
+    public function get_playlists()
+    {
+        if (!$this->is_configured()) {
+            error_log('YouTube: Platform not configured for playlists');
+            return [];
+        }
+
+        try {
+            $playlists = [];
+            $next_page_token = null;
+
+            do {
+                if (!$this->check_quota('playlists')) {
+                    error_log('YouTube: Insufficient quota for playlists');
+                    break;
+                }
+
+                $params = [
+                    'part' => 'snippet,contentDetails',
+                    'channelId' => $this->config['channel_id'],
+                    'maxResults' => 50,
+                    'key' => $this->config['api_key']
+                ];
+
+                if ($next_page_token) {
+                    $params['pageToken'] = $next_page_token;
+                }
+
+                $data = $this->make_api_request(self::API_BASE_URL . '/playlists', $params, 'playlists');
+
+                if (!empty($data['items'])) {
+                    foreach ($data['items'] as $item) {
+                        $thumbnails = $item['snippet']['thumbnails'] ?? [];
+                        $thumbnail = $thumbnails['high']['url']
+                            ?? $thumbnails['medium']['url']
+                            ?? $thumbnails['default']['url']
+                            ?? '';
+
+                        $playlists[] = [
+                            'id' => $item['id'],
+                            'title' => $item['snippet']['title'],
+                            'thumbnail' => $thumbnail,
+                            'video_count' => $item['contentDetails']['itemCount'] ?? 0,
+                            'description' => $item['snippet']['description'] ?? ''
+                        ];
+                    }
+                }
+
+                $next_page_token = $data['nextPageToken'] ?? null;
+            } while ($next_page_token);
+
+            error_log('YouTube: Fetched ' . count($playlists) . ' playlists');
+            return $playlists;
+
+        } catch (\Exception $e) {
+            error_log('YouTube: Error fetching playlists - ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get videos from a specific playlist
+     *
+     * @param string $playlist_id The playlist ID to fetch videos from
+     * @param int $max_pages Maximum number of pages to fetch
+     * @return array List of formatted video items
+     */
+    public function get_playlist_items($playlist_id, $max_pages = 5)
+    {
+        if (!$this->is_configured()) {
+            error_log('YouTube: Platform not configured for playlist items');
+            return [];
+        }
+
+        try {
+            $all_items = [];
+            $next_page_token = null;
+            $page_count = 0;
+            $video_ids = [];
+
+            // STEP 1: Get all video IDs from the playlist
+            do {
+                if (!$this->check_quota('playlistItems')) {
+                    error_log('YouTube: Insufficient quota for playlist items');
+                    break;
+                }
+
+                $params = [
+                    'part' => 'snippet',
+                    'playlistId' => $playlist_id,
+                    'maxResults' => 50,
+                    'key' => $this->config['api_key']
+                ];
+
+                if ($next_page_token) {
+                    $params['pageToken'] = $next_page_token;
+                }
+
+                $data = $this->make_api_request(self::API_BASE_URL . '/playlistItems', $params, 'playlistItems');
+
+                if (!empty($data['items'])) {
+                    foreach ($data['items'] as $item) {
+                        if (!empty($item['snippet']['resourceId']['videoId'])) {
+                            $video_ids[] = $item['snippet']['resourceId']['videoId'];
+                        }
+                    }
+                }
+
+                $next_page_token = $data['nextPageToken'] ?? null;
+                $page_count++;
+            } while ($next_page_token && $page_count < $max_pages);
+
+            error_log('YouTube: Found ' . count($video_ids) . ' video IDs in playlist ' . $playlist_id);
+
+            if (empty($video_ids)) {
+                return [];
+            }
+
+            // STEP 2: Get full video details in batches of 50
+            $video_chunks = array_chunk($video_ids, 50);
+
+            foreach ($video_chunks as $chunk) {
+                if (!$this->check_quota('videos')) {
+                    error_log('YouTube: Insufficient quota for video details');
+                    break;
+                }
+
+                $params = [
+                    'part' => 'snippet,statistics,contentDetails',
+                    'id' => implode(',', $chunk),
+                    'key' => $this->config['api_key']
+                ];
+
+                $video_data = $this->make_api_request(self::API_BASE_URL . '/videos', $params, 'videos');
+
+                if (!empty($video_data['items'])) {
+                    foreach ($video_data['items'] as $video) {
+                        $formatted = $this->format_feed_item($video, 'video');
+                        if ($formatted) {
+                            // Add playlist_id to the item for reference
+                            $formatted['playlist_id'] = $playlist_id;
+                            $all_items[] = $formatted;
+                        }
+                    }
+                }
+            }
+
+            error_log('YouTube: Fetched ' . count($all_items) . ' videos from playlist ' . $playlist_id);
+            return $all_items;
+
+        } catch (\Exception $e) {
+            error_log('YouTube: Error fetching playlist items - ' . $e->getMessage());
+            return [];
+        }
     }
 }

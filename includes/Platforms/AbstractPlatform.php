@@ -375,4 +375,15 @@ abstract class AbstractPlatform implements PlatformInterface
 
         error_log(json_encode($error));
     }
+
+    /**
+     * Get available playlists from the platform
+     * Default implementation returns empty array (to be overridden by platforms that support playlists)
+     *
+     * @return array
+     */
+    public function get_playlists()
+    {
+        return [];
+    }
 }

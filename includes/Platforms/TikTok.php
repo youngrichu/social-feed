@@ -21,9 +21,10 @@ class TikTok extends AbstractPlatform
      * Get feed items from TikTok
      *
      * @param array $types Content types to fetch
+     * @param array $args Optional arguments (unused for TikTok)
      * @return array
      */
-    public function get_feed($types = [])
+    public function get_feed($types = [], $args = [])
     {
         if (!$this->is_configured()) {
             error_log('TikTok Feed: Not configured properly. Config: ' . json_encode($this->config));
