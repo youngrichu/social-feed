@@ -3,7 +3,7 @@
  * Plugin Name: Social Feed
  * Plugin URI: https://github.com/youngrichu/social-feed
  * Description: A comprehensive social media feed aggregator optimized for production environments.
- * Version: 1.1.1
+ * Version: 1.1.2
  * Author: Habtamu
  * License: GPL v2 or later
  * Text Domain: social-feed
@@ -41,7 +41,7 @@ if (version_compare($wp_version, '5.0', '<')) {
 
 // Define plugin constants with fallbacks
 if (!defined('SOCIAL_FEED_VERSION')) {
-    define('SOCIAL_FEED_VERSION', '1.1.1');
+    define('SOCIAL_FEED_VERSION', '1.1.2');
 }
 
 // Ensure WordPress functions are available

@@ -65,6 +65,48 @@ class FeedService
                 ];
             }
 
+            // If a playlist filter is specified, fetch directly from platform (bypass cache)
+            if (!empty($args['playlist'])) {
+                error_log('FeedService: Playlist filter specified, fetching from platform: ' . $args['playlist']);
+                $fetch_results = $this->fetch_platforms_parallel($platforms, $types, $args);
+
+                $all_items = [];
+                foreach ($fetch_results as $platform => $result) {
+                    if ($result['status'] === 'success' && !empty($result['data'])) {
+                        $all_items = array_merge($all_items, $result['data']);
+                    }
+                }
+
+                // Sort items
+                usort($all_items, function ($a, $b) use ($sort, $order) {
+                    $a_val = $a[$sort === 'date' ? 'created_at' : 'engagement_score'] ?? 0;
+                    $b_val = $b[$sort === 'date' ? 'created_at' : 'engagement_score'] ?? 0;
+                    if ($sort === 'date') {
+                        $a_val = strtotime($a_val);
+                        $b_val = strtotime($b_val);
+                    }
+                    return $order === 'desc' ? $b_val - $a_val : $a_val - $b_val;
+                });
+
+                $total_items = count($all_items);
+                $total_pages = ceil($total_items / $per_page);
+                $offset = ($page - 1) * $per_page;
+                $paged_items = array_slice($all_items, $offset, $per_page);
+
+                return [
+                    'status' => 'success',
+                    'data' => [
+                        'items' => $paged_items,
+                        'pagination' => [
+                            'current_page' => $page,
+                            'total_pages' => $total_pages,
+                            'total_items' => $total_items,
+                            'per_page' => $per_page
+                        ]
+                    ]
+                ];
+            }
+
             global $wpdb;
             $cache_table = $wpdb->prefix . 'social_feed_cache';
 
@@ -97,6 +139,7 @@ class FeedService
             if ($total_items == 0) {
                 error_log('FeedService: No cached items found, fetching fresh content');
                 $platform_errors = [];
+
 
                 // Use parallel processing for concurrent platform fetching
                 $fetch_results = $this->fetch_platforms_parallel($platforms, $types, $args);
