@@ -1318,6 +1318,10 @@ class YouTube extends AbstractPlatform
         ];
 
         foreach ($required_fields as $field) {
+            if (empty($video_data['author_avatar'])) {
+                // error_log("YouTube: Missing required field author_avatar for video $video_id" . " - using default");
+                $video_data['author_avatar'] = ''; // Use empty string to suppress warning
+            }
             if (!isset($video_data[$field])) {
                 error_log("YouTube: Missing required field {$field} for video {$video_data['id']}");
 

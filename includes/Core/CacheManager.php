@@ -305,7 +305,7 @@ class CacheManager
         // Get DB stats
         global $wpdb;
         $table = $wpdb->prefix . 'social_feed_cache';
-        $db_stats = $wpdb->get_row("SELECT COUNT(*) as count, SUM(LENGTH(cache_data)) as size, SUM(CASE WHEN expiry < UNIX_TIMESTAMP() THEN 1 ELSE 0 END) as expired FROM $table", ARRAY_A);
+        $db_stats = $wpdb->get_row("SELECT COUNT(*) as count, SUM(LENGTH(content)) as size, SUM(CASE WHEN expires_at < NOW() THEN 1 ELSE 0 END) as expired FROM $table", ARRAY_A);
 
         return array_merge($basic_stats, [
             'total_items' => $db_stats['count'] ?? 0,
@@ -901,13 +901,14 @@ class CacheManager
         return $wpdb->replace(
             $cache_table,
             [
-                'cache_key' => $cache_key,
-                'cache_type' => $type,
-                'cache_data' => maybe_serialize($data),
-                'expiry' => time() + $ttl,
+                'platform' => 'youtube', // Default or need to pass platform?
+                'content_id' => $cache_key,
+                'content_type' => $type,
+                'content' => maybe_serialize($data),
+                'expires_at' => current_time('mysql', time() + $ttl),
                 'created_at' => current_time('mysql')
             ],
-            ['%s', '%s', '%s', '%d', '%s']
+            ['%s', '%s', '%s', '%s', '%s', '%s']
         );
     }
 

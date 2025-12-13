@@ -1,7 +1,8 @@
 <?php
 namespace SocialFeed\Core;
 
-class RequestOptimizer {
+class RequestOptimizer
+{
     /**
      * Request batching configuration
      */
@@ -17,7 +18,8 @@ class RequestOptimizer {
     /**
      * Add request to batch
      */
-    public function add_request($type, $id, $callback) {
+    public function add_request($type, $id, $callback)
+    {
         $this->pending_requests[$type][] = [
             'id' => $id,
             'callback' => $callback,
@@ -35,7 +37,8 @@ class RequestOptimizer {
     /**
      * Check if batch should be processed
      */
-    private function should_process_batch($type) {
+    private function should_process_batch($type)
+    {
         if (!isset($this->pending_requests[$type])) {
             return false;
         }
@@ -45,14 +48,15 @@ class RequestOptimizer {
         $time_waiting = microtime(true) - $oldest_request;
 
         return $batch_size >= self::BATCH_CONFIG['max_ids_per_request'] ||
-               ($batch_size >= self::BATCH_CONFIG['min_batch_size'] && 
+            ($batch_size >= self::BATCH_CONFIG['min_batch_size'] &&
                 $time_waiting >= self::BATCH_CONFIG['max_batch_delay']);
     }
 
     /**
      * Process batch of requests
      */
-    private function process_batch($type) {
+    private function process_batch($type)
+    {
         if (empty($this->pending_requests[$type])) {
             return null;
         }
@@ -67,7 +71,8 @@ class RequestOptimizer {
     /**
      * Optimize API parameters
      */
-    public function optimize_params($params, $operation) {
+    public function optimize_params($params, $operation)
+    {
         switch ($operation) {
             case 'videos':
                 return $this->optimize_video_params($params);
@@ -83,7 +88,8 @@ class RequestOptimizer {
     /**
      * Optimize video request parameters
      */
-    private function optimize_video_params($params) {
+    private function optimize_video_params($params)
+    {
         // Only request necessary fields
         $part_mapping = [
             'snippet' => ['title', 'description', 'thumbnails/high', 'publishedAt', 'channelTitle'],
@@ -94,7 +100,7 @@ class RequestOptimizer {
 
         $parts = explode(',', $params['part']);
         $fields = 'items(id';
-        
+
         foreach ($parts as $part) {
             if (isset($part_mapping[$part])) {
                 $fields .= ',' . $part . '(' . implode(',', $part_mapping[$part]) . ')';
@@ -109,22 +115,24 @@ class RequestOptimizer {
     /**
      * Optimize search request parameters
      */
-    private function optimize_search_params($params) {
+    private function optimize_search_params($params)
+    {
         // Minimize search response data
         $params['fields'] = 'items(id/videoId)';
-        
+
         // Add efficient filters
         if (!isset($params['type'])) {
             $params['type'] = 'video';
         }
-        
+
         return $params;
     }
 
     /**
      * Optimize playlist request parameters
      */
-    private function optimize_playlist_params($params) {
+    private function optimize_playlist_params($params)
+    {
         // Only get necessary playlist item fields
         $params['fields'] = 'items(snippet(resourceId/videoId,publishedAt)),nextPageToken';
         return $params;
@@ -133,14 +141,19 @@ class RequestOptimizer {
     /**
      * Get optimal request timing
      */
-    public function get_optimal_timing($operation) {
+    public function get_optimal_timing($operation)
+    {
         $quota_manager = new QuotaManager();
         $current_usage = $quota_manager->get_current_usage();
-        $daily_limit = QuotaManager::QUOTA_LIMIT_PER_DAY;
-        
+        $daily_limit = $quota_manager->get_quota_limit();
+
         // Calculate remaining quota percentage
-        $remaining_percentage = (($daily_limit - $current_usage) / $daily_limit) * 100;
-        
+        if ($daily_limit > 0) {
+            $remaining_percentage = (($daily_limit - $current_usage) / $daily_limit) * 100;
+        } else {
+            $remaining_percentage = 0;
+        }
+
         // Adjust timing based on remaining quota
         if ($remaining_percentage < 20) {
             return 'high_restriction'; // Minimal essential requests only
