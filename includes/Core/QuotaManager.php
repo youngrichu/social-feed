@@ -58,7 +58,8 @@ class QuotaManager
     }
 
     /**
-     * Check if operation would exceed quota with smart prioritization and predictive analysis
+     * Check if operation would exceed quota with smart prioritization
+     * Simplified: Only blocks based on ACTUAL usage, not predictions
      *
      * @param string $operation
      * @return bool
@@ -84,26 +85,20 @@ class QuotaManager
         // Get operation priority
         $priority = $this->get_operation_priority($operation);
 
-        // Calculate quota percentage
+        // Calculate quota percentage based on ACTUAL current usage
         $quota_percentage = ($current_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
 
-        // Predictive quota management - check if operation fits predicted usage pattern
-        if (!$this->is_operation_within_predicted_budget($operation, $current_usage)) {
-            error_log("YouTube: Operation blocked by predictive quota management: $operation");
-            return false;
-        }
-
-        // Apply adaptive rate limiting based on quota usage
+        // Apply rate limiting based on ACTUAL quota usage only
         if ($quota_percentage >= self::QUOTA_THRESHOLDS['critical']) {
-            // In critical mode, only allow high-priority operations
+            // In critical mode (90%+), only allow high-priority operations
             if ($priority !== 'high') {
-                error_log("YouTube: Operation blocked due to critical quota usage: $operation (Priority: $priority)");
+                error_log("YouTube: Operation blocked - quota at {$quota_percentage}% (critical): $operation");
                 return false;
             }
         } elseif ($quota_percentage >= self::QUOTA_THRESHOLDS['high']) {
-            // In high-restriction mode, block low-priority operations
+            // In high mode (75%+), block low-priority operations
             if ($priority === 'low') {
-                error_log("YouTube: Low-priority operation blocked due to high quota usage: $operation");
+                error_log("YouTube: Low-priority operation blocked - quota at {$quota_percentage}%: $operation");
                 return false;
             }
         }
@@ -125,10 +120,8 @@ class QuotaManager
         $quota_stats['usage'] = $new_usage;
         update_option($quota_stats_key, $quota_stats);
 
-        // Store historical data for predictive analysis
+        // Store historical data for reporting (but not for blocking)
         $this->store_historical_usage($operation, $operation_cost);
-
-        error_log("YouTube: Updated quota usage to $new_usage units for $today (Operation: $operation, Priority: $priority)");
 
         return true;
     }

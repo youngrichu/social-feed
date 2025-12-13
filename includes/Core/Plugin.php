@@ -1,7 +1,8 @@
 <?php
 namespace SocialFeed\Core;
 
-class Plugin {
+class Plugin
+{
     /**
      * @var Plugin|null Instance of the plugin.
      */
@@ -15,16 +16,17 @@ class Plugin {
     /**
      * Initialize the plugin
      */
-    public function init() {
+    public function init()
+    {
         // Add cron schedules
         add_filter('cron_schedules', [$this, 'add_cron_schedules']);
-        
+
         // Schedule cron jobs if not already scheduled
         $this->schedule_cron_jobs();
 
         // Initialize REST API
         add_action('rest_api_init', [$this, 'init_rest_api']);
-        
+
         // Initialize admin
         if (is_admin()) {
             $this->init_admin();
@@ -46,7 +48,8 @@ class Plugin {
     /**
      * Schedule all required cron jobs
      */
-    private function schedule_cron_jobs() {
+    private function schedule_cron_jobs()
+    {
         error_log('Social Feed: Checking cron job schedules at: ' . current_time('mysql'));
 
         // Unschedule old cleanup task if it exists
@@ -63,7 +66,7 @@ class Plugin {
 
         // Create dynamic schedule for YouTube checks
         $schedule_name = 'youtube_dynamic_' . $optimal_interval;
-        add_filter('cron_schedules', function($schedules) use ($optimal_interval, $schedule_name) {
+        add_filter('cron_schedules', function ($schedules) use ($optimal_interval, $schedule_name) {
             $schedules[$schedule_name] = [
                 'interval' => $optimal_interval,
                 'display' => 'Every ' . round($optimal_interval / 60) . ' minutes (Dynamic)'
@@ -102,7 +105,7 @@ class Plugin {
         if (!wp_next_scheduled('social_feed_update_youtube_interval')) {
             wp_schedule_event(time(), 'hourly', 'social_feed_update_youtube_interval');
         }
-        add_action('social_feed_update_youtube_interval', function() {
+        add_action('social_feed_update_youtube_interval', function () {
             $this->schedule_cron_jobs();
         });
 
@@ -121,7 +124,8 @@ class Plugin {
      * @param array $schedules
      * @return array
      */
-    public function add_cron_schedules($schedules) {
+    public function add_cron_schedules($schedules)
+    {
         // Add every minute schedule
         if (!isset($schedules['every_minute'])) {
             $schedules['every_minute'] = [
@@ -152,7 +156,8 @@ class Plugin {
     /**
      * Initialize REST API endpoints
      */
-    public function init_rest_api() {
+    public function init_rest_api()
+    {
         // Register REST API endpoints
         $api = new \SocialFeed\API\RestAPI();
         $api->register_routes();
@@ -161,7 +166,8 @@ class Plugin {
     /**
      * Initialize admin interface
      */
-    private function init_admin() {
+    private function init_admin()
+    {
         $admin = new \SocialFeed\Admin\Admin();
         $admin->init();
     }
@@ -169,7 +175,8 @@ class Plugin {
     /**
      * Initialize frontend functionality
      */
-    private function init_frontend() {
+    private function init_frontend()
+    {
         $frontend = new \SocialFeed\Frontend\Frontend();
         $frontend->init();
     }
@@ -177,7 +184,8 @@ class Plugin {
     /**
      * Initialize cache system
      */
-    private function init_cache() {
+    private function init_cache()
+    {
         $cache = new \SocialFeed\Core\Cache();
         $cache->init();
     }
@@ -185,7 +193,8 @@ class Plugin {
     /**
      * Initialize notifications system
      */
-    private function init_notifications() {
+    private function init_notifications()
+    {
         // Initialize notifications
         if (defined('SOCIAL_FEED_CHURCH_APP_AVAILABLE') && SOCIAL_FEED_CHURCH_APP_AVAILABLE) {
             $notifications = Notifications::get_instance();
@@ -196,7 +205,8 @@ class Plugin {
     /**
      * Initialize social media platforms
      */
-    private function init_platforms() {
+    private function init_platforms()
+    {
         // Initialize platform handlers
         $platforms = [
             'youtube' => new \SocialFeed\Platforms\YouTube(),
@@ -214,10 +224,11 @@ class Plugin {
     /**
      * Get plugin instance
      */
-    public static function get_instance() {
+    public static function get_instance()
+    {
         if (null === self::$instance) {
             self::$instance = new self();
         }
         return self::$instance;
     }
-} 
+}

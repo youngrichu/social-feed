@@ -4,7 +4,8 @@ namespace SocialFeed\Core;
 /**
  * Handle notifications for social feed events
  */
-class Notifications {
+class Notifications
+{
     /**
      * @var bool Flag to track initialization
      */
@@ -25,7 +26,8 @@ class Notifications {
      *
      * @return Notifications
      */
-    public static function get_instance() {
+    public static function get_instance()
+    {
         if (self::$instance === null) {
             self::$instance = new self();
         }
@@ -35,7 +37,8 @@ class Notifications {
     /**
      * Private constructor to enforce singleton pattern
      */
-    private function __construct() {
+    private function __construct()
+    {
         // Check Church App Notifications availability
         self::$church_app_available = $this->check_church_app_available();
     }
@@ -45,7 +48,8 @@ class Notifications {
      *
      * @return bool
      */
-    private function check_church_app_available() {
+    private function check_church_app_available()
+    {
         // First check if the plugin is active
         if (!defined('SOCIAL_FEED_CHURCH_APP_AVAILABLE') || !SOCIAL_FEED_CHURCH_APP_AVAILABLE) {
             error_log('Social Feed: Church App Notifications plugin is not active');
@@ -54,12 +58,14 @@ class Notifications {
 
         // Check if the plugin is actually loaded by looking for its functions or actions
         $plugin_loaded = false;
-        
+
         // Check for common Church App Notifications functions/hooks
-        if (function_exists('church_app_notifications_init') || 
+        if (
+            function_exists('church_app_notifications_init') ||
             has_action('init', 'church_app_notifications_init') ||
             class_exists('Church_App_Notifications') ||
-            defined('CHURCH_APP_NOTIFICATIONS_VERSION')) {
+            defined('CHURCH_APP_NOTIFICATIONS_VERSION')
+        ) {
             $plugin_loaded = true;
         }
 
@@ -88,7 +94,8 @@ class Notifications {
     /**
      * Initialize notifications system
      */
-    public function init() {
+    public function init()
+    {
         // Prevent multiple initializations
         if (self::$initialized) {
             error_log('Social Feed: Notifications system already initialized, skipping');
@@ -104,14 +111,14 @@ class Notifications {
         }
 
         error_log('Social Feed: Initializing notifications system');
-            
+
         // Schedule periodic checks
-            if (!wp_next_scheduled('social_feed_check_notifications')) {
-                wp_schedule_event(time(), 'every_minute', 'social_feed_check_notifications');
-            }
+        if (!wp_next_scheduled('social_feed_check_notifications')) {
+            wp_schedule_event(time(), 'every_minute', 'social_feed_check_notifications');
+        }
 
         // Add action hooks for content updates
-            add_action('social_feed_check_notifications', [$this, 'check_and_send_notifications']);
+        add_action('social_feed_check_notifications', [$this, 'check_and_send_notifications']);
         add_action('social_feed_new_content', [$this, 'handle_new_content']);
         add_action('social_feed_stream_status_change', [$this, 'handle_stream_status_change']);
 
@@ -128,7 +135,8 @@ class Notifications {
      * @param array $notification_types
      * @return bool|WP_Error
      */
-    public function register_device($user_id, $device_token, $platform, $notification_types = ['video', 'live']) {
+    public function register_device($user_id, $device_token, $platform, $notification_types = ['video', 'live'])
+    {
         if (!defined('SOCIAL_FEED_CHURCH_APP_AVAILABLE') || !SOCIAL_FEED_CHURCH_APP_AVAILABLE) {
             return new \WP_Error(
                 'notifications_disabled',
@@ -139,7 +147,7 @@ class Notifications {
 
         global $wpdb;
         $table = $wpdb->prefix . 'app_push_tokens';
-        
+
         // Check if device token already exists
         $existing = $wpdb->get_row($wpdb->prepare(
             "SELECT id FROM $table WHERE token = %s",
@@ -182,7 +190,8 @@ class Notifications {
      * @param string $device_token
      * @return bool|WP_Error
      */
-    public function unregister_device($user_id, $device_token) {
+    public function unregister_device($user_id, $device_token)
+    {
         if (!defined('SOCIAL_FEED_CHURCH_APP_AVAILABLE') || !SOCIAL_FEED_CHURCH_APP_AVAILABLE) {
             return new \WP_Error(
                 'notifications_disabled',
@@ -193,7 +202,7 @@ class Notifications {
 
         global $wpdb;
         $table = $wpdb->prefix . 'app_push_tokens';
-        
+
         return $wpdb->delete(
             $table,
             [
@@ -210,10 +219,11 @@ class Notifications {
      * @param string $type Notification type
      * @return string Channel ID
      */
-    private function get_notification_channel($type) {
+    private function get_notification_channel($type)
+    {
         // Remove social_ prefix if present
         $type = str_replace('social_', '', $type);
-        
+
         switch ($type) {
             case 'video':
                 return 'videos';
@@ -230,14 +240,15 @@ class Notifications {
      * @param array $data Raw notification data
      * @return array
      */
-    private function format_notification($data) {
+    private function format_notification($data)
+    {
         // Clean up the type
         $type = str_replace('social_', '', $data['type']);
-        
+
         // Ensure URL is properly formatted for deep linking
         $url = !empty($data['url']) ? $data['url'] : '';
         $youtube_url = $url; // Store original YouTube URL
-        
+
         // Extract video ID and create deep link for both videos and shorts
         if (strpos($url, 'youtube.com/watch?v=') !== false || strpos($url, 'youtu.be/') !== false) {
             preg_match('/(?:watch\?v=|youtu\.be\/)([^&]+)/', $url, $matches);
@@ -256,7 +267,7 @@ class Notifications {
                 'youtube_url' => $youtube_url, // Original YouTube URL
                 'image' => $data['image'] ?? '',
                 'timestamp' => current_time('mysql'),
-                'reference_id' => (string)($data['reference_id'] ?? ''),
+                'reference_id' => (string) ($data['reference_id'] ?? ''),
                 'reference_type' => $data['reference_type'] ?? 'social_feed',
                 'reference_url' => $url, // Use deep link URL here as well
                 'click_action' => $url
@@ -270,7 +281,8 @@ class Notifications {
      * @param array $notification
      * @return bool
      */
-    private function send_notification($notification) {
+    private function send_notification($notification)
+    {
         if (!self::$church_app_available) {
             error_log('Social Feed: Cannot send notification - Church App Notifications not available');
             return false;
@@ -281,7 +293,7 @@ class Notifications {
 
             // Clean up the type for database storage
             $db_type = str_replace('social_', '', $notification['type']);
-            
+
             // Format notification first to get proper channel and data
             $formatted_notification = $this->format_notification([
                 'type' => $db_type,
@@ -292,7 +304,7 @@ class Notifications {
                 'reference_id' => $notification['reference_id'],
                 'reference_type' => $notification['reference_type']
             ]);
-            
+
             error_log('Social Feed: Formatted notification: ' . json_encode($formatted_notification));
 
             // Get the channel for this notification
@@ -331,7 +343,7 @@ class Notifications {
             // Store in database
             global $wpdb;
             $notifications_table = $wpdb->prefix . 'app_notifications';
-            
+
             // Check for duplicate before proceeding
             $existing = $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM $notifications_table 
@@ -364,7 +376,17 @@ class Notifications {
                 $notifications_table,
                 $insert_data,
                 [
-                    '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'
+                    '%d',
+                    '%s',
+                    '%s',
+                    '%s',
+                    '%s',
+                    '%s',
+                    '%s',
+                    '%s',
+                    '%s',
+                    '%s',
+                    '%s'
                 ]
             );
 
@@ -440,9 +462,9 @@ class Notifications {
                 // Fallback to action hook
                 do_action('church_app_send_push_notification', $device_tokens, $push_payload);
             }
-            
+
             return true;
-            
+
         } catch (\Exception $e) {
             error_log('Social Feed: Error in send_notification - ' . $e->getMessage());
             error_log('Social Feed: Error trace - ' . $e->getTraceAsString());
@@ -455,7 +477,8 @@ class Notifications {
      *
      * @param array $data Content data
      */
-    public function handle_new_content($data) {
+    public function handle_new_content($data)
+    {
         if (!self::$church_app_available || !self::$initialized) {
             error_log('Social Feed: Notifications system not available or not initialized');
             return;
@@ -476,7 +499,7 @@ class Notifications {
                 WHERE reference_id = %s",
                 $data['content']['id']
             ));
-            
+
             if ($existing_notification > 0) {
                 error_log("Social Feed: Notification already exists for content ID: {$data['content']['id']}, skipping");
                 return;
@@ -505,27 +528,27 @@ class Notifications {
                     return;
                 }
 
-            $notification = [
-                'type' => 'social_' . $data['type'],
-                'title' => 'New ' . ucfirst($data['type']) . ' Available',
-                'message' => $data['content']['title'],
+                $notification = [
+                    'type' => 'social_' . $data['type'],
+                    'title' => 'New ' . ucfirst($data['type']) . ' Available',
+                    'message' => $data['content']['title'],
                     'url' => $data['content']['original_url'],
-                'image' => $data['content']['thumbnail_url'],
-                'reference_id' => $data['content']['id'],
+                    'image' => $data['content']['thumbnail_url'],
+                    'reference_id' => $data['content']['id'],
                     'reference_type' => $data['type']
-            ];
-            
-            if ($this->send_notification($notification)) {
-                error_log("Social Feed: Successfully sent notification for content ID: {$data['content']['id']}");
-                    
+                ];
+
+                if ($this->send_notification($notification)) {
+                    error_log("Social Feed: Successfully sent notification for content ID: {$data['content']['id']}");
+
                     // Set a longer transient to prevent re-processing for 24 hours
                     set_transient(
                         'social_feed_notification_sent_' . $data['content']['id'],
                         true,
                         24 * HOUR_IN_SECONDS
                     );
-            } else {
-                error_log("Social Feed: Failed to send notification for content ID: {$data['content']['id']}");
+                } else {
+                    error_log("Social Feed: Failed to send notification for content ID: {$data['content']['id']}");
                 }
             } finally {
                 delete_transient($lock_key);
@@ -542,7 +565,8 @@ class Notifications {
      *
      * @param array $data Stream data
      */
-    public function handle_stream_status_change($data) {
+    public function handle_stream_status_change($data)
+    {
         if (!self::$church_app_available || !self::$initialized) {
             error_log('Social Feed: Notifications system not available or not initialized');
             return;
@@ -563,7 +587,7 @@ class Notifications {
         // Update database
         global $wpdb;
         $table = $wpdb->prefix . 'social_feed_streams';
-        
+
         $wpdb->replace(
             $table,
             [
@@ -577,9 +601,11 @@ class Notifications {
         );
 
         // Send notification when stream goes live
-        if ($data['current_status'] === 'live' && 
-            ($data['previous_status'] !== 'live')) {
-            
+        if (
+            $data['current_status'] === 'live' &&
+            ($data['previous_status'] !== 'live')
+        ) {
+
             // Check if we've sent a notification for this stream recently
             $notification_key = 'social_feed_live_notification_' . $data['stream_id'];
             if (get_transient($notification_key)) {
@@ -605,7 +631,7 @@ class Notifications {
             // Format stream title and platform info
             $platform_name = ucfirst($data['platform']);
             $stream_title = !empty($data['details']['title']) ? $data['details']['title'] : 'Live Stream';
-            
+
             $notification = [
                 'type' => 'social_live',
                 'title' => $platform_name . ' Live Stream Started',
@@ -615,7 +641,7 @@ class Notifications {
                 'reference_id' => $data['stream_id'],
                 'reference_type' => 'live_stream'
             ];
-            
+
             if ($this->send_notification($notification)) {
                 // Set a transient to prevent duplicate notifications
                 set_transient($notification_key, true, 5 * MINUTE_IN_SECONDS);
@@ -627,7 +653,8 @@ class Notifications {
      * Check for new content and send notifications
      * This method is called by the WordPress cron
      */
-    public function check_and_send_notifications() {
+    public function check_and_send_notifications()
+    {
         if (!self::$church_app_available || !self::$initialized) {
             error_log('Social Feed: Notifications system not available or not initialized');
             return;
@@ -651,11 +678,13 @@ class Notifications {
 
         foreach ($new_videos as $video) {
             $content = json_decode($video->content);
-            if (!$content) continue;
+            if (!$content)
+                continue;
 
             // Check if notification was already sent
             $notification_sent = get_transient('social_feed_notification_sent_' . $video->content_id);
-            if ($notification_sent) continue;
+            if ($notification_sent)
+                continue;
 
             $notification = [
                 'type' => 'social_' . $video->content_type,
@@ -666,7 +695,7 @@ class Notifications {
                 'reference_id' => $video->content_id,
                 'reference_type' => $video->content_type
             ];
-            
+
             if ($this->send_notification($notification)) {
                 // Set a transient to prevent duplicate notifications
                 set_transient(
@@ -690,7 +719,8 @@ class Notifications {
      * @param string $type Type of notification to test (video, live, or both)
      * @return array Test results
      */
-    public function test_notifications($type = 'both') {
+    public function test_notifications($type = 'both')
+    {
         // Check if we're in production
         if (defined('WP_ENVIRONMENT_TYPE') && WP_ENVIRONMENT_TYPE === 'production') {
             return [
@@ -715,10 +745,10 @@ class Notifications {
             // Check for active device tokens (gracefully handle missing table)
             global $wpdb;
             $tokens_table = $wpdb->prefix . 'app_push_tokens';
-            
+
             // Check if table exists first
             $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$tokens_table'") === $tokens_table;
-            
+
             if ($table_exists) {
                 $active_tokens = $wpdb->get_var("SELECT COUNT(*) FROM $tokens_table WHERE is_active = 1");
                 $results['messages'][] = "Found {$active_tokens} active device tokens";
@@ -731,7 +761,7 @@ class Notifications {
                 // Test video notification
                 $video_id = 'test_video_' . time();
                 $video_url = 'https://www.youtube.com/watch?v=' . $video_id;
-                
+
                 $notification = [
                     'type' => 'video',
                     'title' => 'New Video Available',
@@ -744,7 +774,7 @@ class Notifications {
 
                 // First attempt should succeed
                 $sent = $this->send_notification($notification);
-                
+
                 // Verify notification was stored
                 $notification_exists = $wpdb->get_var($wpdb->prepare(
                     "SELECT COUNT(*) FROM {$wpdb->prefix}app_notifications 
@@ -753,7 +783,7 @@ class Notifications {
                 ));
 
                 $results['messages'][] = ($notification_exists && $sent)
-                    ? "✓ Video notification stored successfully" 
+                    ? "✓ Video notification stored successfully"
                     : "✗ Failed to store video notification";
 
                 // Test duplicate prevention
@@ -764,8 +794,8 @@ class Notifications {
                     $video_id
                 ));
 
-                $results['messages'][] = $duplicate_count === '1' 
-                    ? "✓ Duplicate prevention working for video" 
+                $results['messages'][] = $duplicate_count === '1'
+                    ? "✓ Duplicate prevention working for video"
                     : "✗ Duplicate prevention failed for video";
             }
 
@@ -773,7 +803,7 @@ class Notifications {
                 // Test live stream notification
                 $stream_id = 'test_stream_' . time();
                 $stream_url = 'https://www.youtube.com/watch?v=' . $stream_id;
-                
+
                 $notification = [
                     'type' => 'live',
                     'title' => 'YouTube Live Stream Started',
@@ -786,7 +816,7 @@ class Notifications {
 
                 // First attempt should succeed
                 $sent = $this->send_notification($notification);
-                
+
                 // Verify notification was stored
                 $notification_exists = $wpdb->get_var($wpdb->prepare(
                     "SELECT COUNT(*) FROM {$wpdb->prefix}app_notifications 
@@ -795,7 +825,7 @@ class Notifications {
                 ));
 
                 $results['messages'][] = ($notification_exists && $sent)
-                    ? "✓ Live stream notification stored successfully" 
+                    ? "✓ Live stream notification stored successfully"
                     : "✗ Failed to store live stream notification";
 
                 // Test duplicate prevention
@@ -806,8 +836,8 @@ class Notifications {
                     $stream_id
                 ));
 
-                $results['messages'][] = $duplicate_count === '1' 
-                    ? "✓ Duplicate prevention working for live stream" 
+                $results['messages'][] = $duplicate_count === '1'
+                    ? "✓ Duplicate prevention working for live stream"
                     : "✗ Duplicate prevention failed for live stream";
             }
 
@@ -819,8 +849,8 @@ class Notifications {
 
             if ($latest_notification) {
                 $has_youtube_url = strpos($latest_notification->reference_url, 'youtube.com/watch?v=') !== false;
-                $results['messages'][] = $has_youtube_url 
-                    ? "✓ YouTube URLs are properly formatted" 
+                $results['messages'][] = $has_youtube_url
+                    ? "✓ YouTube URLs are properly formatted"
                     : "✗ YouTube URLs not properly formatted";
             }
 
