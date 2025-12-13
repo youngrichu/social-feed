@@ -52,7 +52,7 @@ class Notifications
     {
         // First check if the plugin is active
         if (!defined('SOCIAL_FEED_CHURCH_APP_AVAILABLE') || !SOCIAL_FEED_CHURCH_APP_AVAILABLE) {
-            error_log('Social Feed: Church App Notifications plugin is not active');
+
             return false;
         }
 
@@ -70,7 +70,7 @@ class Notifications
         }
 
         if (!$plugin_loaded) {
-            error_log('Social Feed: Church App Notifications plugin is active but not properly loaded');
+
             // Still return true for basic integration - we'll handle missing features gracefully
         }
 
@@ -83,11 +83,11 @@ class Notifications
         $notifications_exist = $wpdb->get_var("SHOW TABLES LIKE '$notifications_table'") === $notifications_table;
 
         if (!$tokens_exist || !$notifications_exist) {
-            error_log('Social Feed: Church App Notifications database tables are missing - notifications will be limited');
+
             // Don't fail completely - we can still work with basic functionality
         }
 
-        error_log('Social Feed: Church App Notifications integration check completed - plugin loaded: ' . ($plugin_loaded ? 'yes' : 'no'));
+
         return true; // Return true if plugin is active, handle missing features gracefully
     }
 
@@ -98,7 +98,7 @@ class Notifications
     {
         // Prevent multiple initializations
         if (self::$initialized) {
-            error_log('Social Feed: Notifications system already initialized, skipping');
+
             return;
         }
 
@@ -110,7 +110,7 @@ class Notifications
             return;
         }
 
-        error_log('Social Feed: Initializing notifications system');
+
 
         // Schedule periodic checks
         if (!wp_next_scheduled('social_feed_check_notifications')) {
@@ -123,7 +123,7 @@ class Notifications
         add_action('social_feed_stream_status_change', [$this, 'handle_stream_status_change']);
 
         self::$initialized = true;
-        error_log('Social Feed: Notifications system initialized');
+
     }
 
     /**
@@ -289,7 +289,7 @@ class Notifications
         }
 
         try {
-            error_log('Social Feed: Starting send_notification process with data: ' . json_encode($notification));
+
 
             // Clean up the type for database storage
             $db_type = str_replace('social_', '', $notification['type']);
@@ -305,7 +305,7 @@ class Notifications
                 'reference_type' => $notification['reference_type']
             ]);
 
-            error_log('Social Feed: Formatted notification: ' . json_encode($formatted_notification));
+
 
             // Get the channel for this notification
             $channel = $this->get_notification_channel($db_type);
@@ -539,7 +539,6 @@ class Notifications
                 ];
 
                 if ($this->send_notification($notification)) {
-                    error_log("Social Feed: Successfully sent notification for content ID: {$data['content']['id']}");
 
                     // Set a longer transient to prevent re-processing for 24 hours
                     set_transient(

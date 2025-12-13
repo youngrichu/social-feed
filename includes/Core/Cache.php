@@ -1,11 +1,13 @@
 <?php
 namespace SocialFeed\Core;
 
-class Cache {
+class Cache
+{
     /**
      * Initialize cache system
      */
-    public function init() {
+    public function init()
+    {
         // Schedule cache cleanup
         if (!wp_next_scheduled('social_feed_cache_cleanup')) {
             wp_schedule_event(time(), 'daily', 'social_feed_cache_cleanup');
@@ -21,17 +23,18 @@ class Cache {
      * @param string $content_id Content ID
      * @return mixed|false Cached data or false if not found/expired
      */
-    public function get($platform, $content_type, $content_id) {
+    public function get($platform, $content_type, $content_id)
+    {
         global $wpdb;
-        
+
         try {
             $table = $wpdb->prefix . 'social_feed_cache';
-            
+
             // Validate inputs
             if (empty($platform) || empty($content_type) || empty($content_id)) {
                 return false;
             }
-            
+
             $result = $wpdb->get_row(
                 $wpdb->prepare(
                     "SELECT content FROM $table 
@@ -49,9 +52,9 @@ class Cache {
                 $decoded = json_decode($result->content, true);
                 return $decoded !== null ? $decoded : false;
             }
-            
+
             return false;
-            
+
         } catch (\Exception $e) {
             error_log('Cache get error: ' . $e->getMessage());
             return false;
@@ -68,30 +71,31 @@ class Cache {
      * @param int $expiration Expiration time in seconds (default 1 hour)
      * @return bool Success status
      */
-    public function set($platform, $content_type, $content_id, $content, $expiration = 3600) {
+    public function set($platform, $content_type, $content_id, $content, $expiration = 3600)
+    {
         global $wpdb;
-        
+
         try {
             $table = $wpdb->prefix . 'social_feed_cache';
-            
+
             // Validate inputs
             if (empty($platform) || empty($content_type) || empty($content_id) || $content === null) {
                 return false;
             }
-            
+
             // Validate expiration
             $expiration = max(60, min($expiration, 86400 * 7)); // Between 1 minute and 7 days
-            
+
             // Delete existing cache for this content
             $this->delete($platform, $content_type, $content_id);
-            
+
             // Encode content with error handling
             $encoded_content = json_encode($content);
             if ($encoded_content === false) {
                 error_log('Cache set error: Failed to encode content for ' . $platform . '/' . $content_type . '/' . $content_id);
                 return false;
             }
-            
+
             // Insert new cache
             $result = $wpdb->insert(
                 $table,
@@ -107,7 +111,7 @@ class Cache {
             );
 
             return $result !== false;
-            
+
         } catch (\Exception $e) {
             error_log('Cache set error: ' . $e->getMessage());
             return false;
@@ -122,17 +126,18 @@ class Cache {
      * @param string $content_id Content ID
      * @return bool Success status
      */
-    public function delete($platform, $content_type, $content_id) {
+    public function delete($platform, $content_type, $content_id)
+    {
         global $wpdb;
-        
+
         try {
             $table = $wpdb->prefix . 'social_feed_cache';
-            
+
             // Validate inputs
             if (empty($platform) || empty($content_type) || empty($content_id)) {
                 return false;
             }
-            
+
             $result = $wpdb->delete(
                 $table,
                 [
@@ -144,7 +149,7 @@ class Cache {
             );
 
             return $result !== false;
-            
+
         } catch (\Exception $e) {
             error_log('Cache delete error: ' . $e->getMessage());
             return false;
@@ -154,10 +159,11 @@ class Cache {
     /**
      * Clean up expired cache entries
      */
-    public function cleanup_expired_cache() {
+    public function cleanup_expired_cache()
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'social_feed_cache';
-        
+
         // Only clean up entries that have actually expired
         $wpdb->query(
             "DELETE FROM $table 
@@ -175,7 +181,7 @@ class Cache {
 
         // Log cleanup results
         $affected = $wpdb->rows_affected;
-        error_log("Social Feed: Cache cleanup completed. Removed $affected expired entries.");
+
     }
 
     /**
@@ -184,10 +190,11 @@ class Cache {
      * @param string $platform Platform identifier
      * @return bool Success status
      */
-    public function clear_platform_cache($platform) {
+    public function clear_platform_cache($platform)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'social_feed_cache';
-        
+
         $result = $wpdb->delete(
             $table,
             ['platform' => $platform],
@@ -202,10 +209,11 @@ class Cache {
      *
      * @return bool Success status
      */
-    public function clear_all_cache() {
+    public function clear_all_cache()
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'social_feed_cache';
-        
+
         $result = $wpdb->query("TRUNCATE TABLE $table");
 
         return $result !== false;

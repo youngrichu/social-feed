@@ -50,19 +50,19 @@ class Plugin
      */
     private function schedule_cron_jobs()
     {
-        error_log('Social Feed: Checking cron job schedules at: ' . current_time('mysql'));
+
 
         // Unschedule old cleanup task if it exists
         $old_timestamp = wp_next_scheduled('social_feed_cache_cleanup');
         if ($old_timestamp) {
-            error_log('Social Feed: Unscheduling old cache cleanup task');
+
             wp_unschedule_event($old_timestamp, 'social_feed_cache_cleanup');
         }
 
         // Get YouTube platform instance for quota-aware scheduling
         $youtube = new \SocialFeed\Platforms\YouTube();
         $optimal_interval = $youtube->calculate_optimal_interval();
-        error_log('Social Feed: Calculated optimal interval for YouTube checks: ' . $optimal_interval . ' seconds');
+
 
         // Create dynamic schedule for YouTube checks
         $schedule_name = 'youtube_dynamic_' . $optimal_interval;
@@ -77,27 +77,27 @@ class Plugin
         // Schedule YouTube video check with dynamic interval
         $next_video_check = wp_next_scheduled('social_feed_youtube_check_new_videos');
         if ($next_video_check) {
-            error_log('Social Feed: Unscheduling existing YouTube video check');
+
             wp_unschedule_event($next_video_check, 'social_feed_youtube_check_new_videos');
         }
-        error_log('Social Feed: Scheduling YouTube new videos check with interval: ' . $optimal_interval . ' seconds');
+
         wp_schedule_event(time(), $schedule_name, 'social_feed_youtube_check_new_videos');
 
         // Schedule YouTube live stream check (keep at 5 minutes as it's critical)
         if (!wp_next_scheduled('social_feed_youtube_check_live_streams')) {
-            error_log('Social Feed: Scheduling YouTube live streams check');
+
             wp_schedule_event(time(), 'five_minutes', 'social_feed_youtube_check_live_streams');
         }
 
         // Schedule notifications check
         if (!wp_next_scheduled('social_feed_check_notifications')) {
-            error_log('Social Feed: Scheduling notifications check');
+
             wp_schedule_event(time(), 'every_minute', 'social_feed_check_notifications');
         }
 
         // Schedule cache cleanup (new task name)
         if (!wp_next_scheduled('social_feed_cleanup_cache')) {
-            error_log('Social Feed: Scheduling cache cleanup');
+
             wp_schedule_event(strtotime('tomorrow 00:00:00'), 'daily', 'social_feed_cleanup_cache');
         }
 
@@ -109,13 +109,6 @@ class Plugin
             $this->schedule_cron_jobs();
         });
 
-        // Log next run times
-        error_log('Social Feed: Next scheduled runs:');
-        error_log('- New videos check: ' . date('Y-m-d H:i:s', wp_next_scheduled('social_feed_youtube_check_new_videos')));
-        error_log('- Live streams check: ' . date('Y-m-d H:i:s', wp_next_scheduled('social_feed_youtube_check_live_streams')));
-        error_log('- Notifications check: ' . date('Y-m-d H:i:s', wp_next_scheduled('social_feed_check_notifications')));
-        error_log('- Cache cleanup: ' . date('Y-m-d H:i:s', wp_next_scheduled('social_feed_cleanup_cache')));
-        error_log('- Interval update: ' . date('Y-m-d H:i:s', wp_next_scheduled('social_feed_update_youtube_interval')));
     }
 
     /**
