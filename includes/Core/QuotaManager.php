@@ -6,7 +6,7 @@ class QuotaManager
     /**
      * YouTube API quota limits
      */
-    const QUOTA_LIMIT_PER_DAY = 10000;
+    const DEFAULT_QUOTA_LIMIT = 10000;
     const QUOTA_COSTS = [
         'search' => 100,
         'videos' => 1,
@@ -51,6 +51,23 @@ class QuotaManager
      *
      * @return int
      */
+    /**
+     * Get quota limit from settings
+     *
+     * @return int
+     */
+    public function get_quota_limit()
+    {
+        $options = get_option('social_feed_platforms', []);
+        $limit = $options['youtube']['quota_limit'] ?? self::DEFAULT_QUOTA_LIMIT;
+        return (int) $limit;
+    }
+
+    /**
+     * Get current quota usage
+     *
+     * @return int
+     */
     public function get_current_usage()
     {
         $quota_key = 'youtube_quota_usage_' . date('Y-m-d');
@@ -86,7 +103,8 @@ class QuotaManager
         $priority = $this->get_operation_priority($operation);
 
         // Calculate quota percentage based on ACTUAL current usage
-        $quota_percentage = ($current_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
+        $daily_limit = $this->get_quota_limit();
+        $quota_percentage = ($current_usage / $daily_limit) * 100;
 
         // Apply rate limiting based on ACTUAL quota usage only
         if ($quota_percentage >= self::QUOTA_THRESHOLDS['critical']) {
@@ -104,8 +122,9 @@ class QuotaManager
         }
 
         // Check if operation would exceed quota
-        if (($current_usage + $operation_cost) >= self::QUOTA_LIMIT_PER_DAY) {
-            error_log("YouTube: Daily quota would be exceeded. Current: $current_usage, Operation cost: $operation_cost");
+        $daily_limit = $this->get_quota_limit();
+        if (($current_usage + $operation_cost) >= $daily_limit) {
+            error_log("YouTube: Daily quota would be exceeded. Current: $current_usage, Operation cost: $operation_cost, Limit: $daily_limit");
             set_transient($quota_exceeded_key, true, DAY_IN_SECONDS);
             return false;
         }
@@ -171,6 +190,35 @@ class QuotaManager
     }
 
     /**
+     * Force reset quota usage (useful when API quota was reset on Google side)
+     *
+     * @param int $new_usage Optional new usage value
+     * @return bool
+     */
+    public function force_reset_quota($new_usage = 0)
+    {
+        $today = date('Y-m-d');
+        $quota_key = 'youtube_quota_usage_' . $today;
+        $quota_exceeded_key = 'youtube_quota_exceeded_' . $today;
+        $quota_stats_key = 'youtube_quota_stats_' . $today;
+
+        set_transient($quota_key, $new_usage, DAY_IN_SECONDS);
+        delete_transient($quota_exceeded_key);
+
+        $quota_stats = [
+            'usage' => $new_usage,
+            'operations' => [],
+            'reset_at' => current_time('mysql'),
+            'last_update' => current_time('mysql')
+        ];
+
+        update_option($quota_stats_key, $quota_stats);
+        error_log("YouTube: Quota usage manually reset to $new_usage for " . $today);
+
+        return true;
+    }
+
+    /**
      * Get quota usage percentage
      *
      * @return float
@@ -178,7 +226,8 @@ class QuotaManager
     public function get_quota_usage_percentage()
     {
         $current_usage = $this->get_current_usage();
-        return ($current_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
+        $daily_limit = $this->get_quota_limit();
+        return ($current_usage / $daily_limit) * 100;
     }
 
     /**
@@ -189,7 +238,7 @@ class QuotaManager
     public function get_remaining_quota()
     {
         $current_usage = $this->get_current_usage();
-        return self::QUOTA_LIMIT_PER_DAY - $current_usage;
+        return $this->get_quota_limit() - $current_usage;
     }
 
     /**
@@ -211,11 +260,13 @@ class QuotaManager
         $percentage = $this->get_quota_usage_percentage();
         $predictions = $this->get_usage_predictions();
 
+        $daily_limit = $this->get_quota_limit();
+
         return [
             'current_usage' => $current_usage,
             'percentage' => $percentage,
-            'limit' => self::QUOTA_LIMIT_PER_DAY,
-            'remaining' => self::QUOTA_LIMIT_PER_DAY - $current_usage,
+            'limit' => $daily_limit,
+            'remaining' => $daily_limit - $current_usage,
             'operations' => $stats['operations'],
             'last_update' => $stats['last_update'],
             'status' => $this->get_quota_status($percentage),
@@ -257,7 +308,7 @@ class QuotaManager
         }
 
         $current_usage = $this->get_current_usage();
-        $remaining = self::QUOTA_LIMIT_PER_DAY - $current_usage;
+        $remaining = $this->get_quota_limit() - $current_usage;
         $is_safe = ($total_cost <= $remaining);
 
         return [
@@ -336,7 +387,7 @@ class QuotaManager
 
         $predictions = [
             'end_of_day_usage' => $predicted_eod_usage,
-            'end_of_day_percentage' => ($predicted_eod_usage / self::QUOTA_LIMIT_PER_DAY) * 100,
+            'end_of_day_percentage' => ($predicted_eod_usage / $this->get_quota_limit()) * 100,
             'confidence' => $confidence,
             'risk_level' => $this->assess_risk_level($predicted_eod_usage),
             'recommended_actions' => $this->get_recommended_actions($predicted_eod_usage),
@@ -412,7 +463,7 @@ class QuotaManager
      */
     private function assess_risk_level($predicted_usage)
     {
-        $percentage = ($predicted_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
+        $percentage = ($predicted_usage / $this->get_quota_limit()) * 100;
 
         if ($percentage >= 95) {
             return 'critical';
@@ -433,7 +484,7 @@ class QuotaManager
      */
     private function get_recommended_actions($predicted_usage)
     {
-        $percentage = ($predicted_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
+        $percentage = ($predicted_usage / $this->get_quota_limit()) * 100;
         $actions = [];
 
         if ($percentage >= 95) {
@@ -476,7 +527,7 @@ class QuotaManager
                 'hour' => $hour,
                 'predicted_usage' => $predicted_usage,
                 'cumulative_usage' => $cumulative_usage,
-                'percentage' => ($cumulative_usage / self::QUOTA_LIMIT_PER_DAY) * 100
+                'percentage' => ($cumulative_usage / $this->get_quota_limit()) * 100
             ];
         }
 
@@ -501,7 +552,7 @@ class QuotaManager
         }
 
         // Check if adding this operation would push us over the safe threshold
-        $safe_threshold = self::QUOTA_LIMIT_PER_DAY * (1 - self::QUOTA_BUFFER_PERCENTAGE / 100);
+        $safe_threshold = $this->get_quota_limit() * (1 - self::QUOTA_BUFFER_PERCENTAGE / 100);
         $predicted_with_operation = $predictions['end_of_day_usage'] + $operation_cost;
 
         return $predicted_with_operation <= $safe_threshold;
@@ -599,7 +650,7 @@ class QuotaManager
     private function calculate_efficiency_score($daily_totals)
     {
         $avg_usage = array_sum($daily_totals) / count($daily_totals);
-        $utilization_rate = ($avg_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
+        $utilization_rate = ($avg_usage / $this->get_quota_limit()) * 100;
 
         // Optimal utilization is around 60-80%
         if ($utilization_rate >= 60 && $utilization_rate <= 80) {

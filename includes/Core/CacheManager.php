@@ -292,7 +292,26 @@ class CacheManager
         $basic_stats = $this->cache_stats;
         $analytics = $this->get_cache_analytics();
 
+        // Agregate stats for Admin UI
+        $total_hits = 0;
+        $total_misses = 0;
+        foreach ($basic_stats as $type_stats) {
+            $total_hits += $type_stats['hits'] ?? 0;
+            $total_misses += $type_stats['misses'] ?? 0;
+        }
+        $total_requests = $total_hits + $total_misses;
+        $hit_rate = $total_requests > 0 ? ($total_hits / $total_requests) * 100 : 0;
+
+        // Get DB stats
+        global $wpdb;
+        $table = $wpdb->prefix . 'social_feed_cache';
+        $db_stats = $wpdb->get_row("SELECT COUNT(*) as count, SUM(LENGTH(cache_data)) as size, SUM(CASE WHEN expiry < UNIX_TIMESTAMP() THEN 1 ELSE 0 END) as expired FROM $table", ARRAY_A);
+
         return array_merge($basic_stats, [
+            'total_items' => $db_stats['count'] ?? 0,
+            'total_size' => $db_stats['size'] ?? 0,
+            'hit_rate' => $hit_rate,
+            'expired_items' => $db_stats['expired'] ?? 0,
             'analytics' => $analytics,
             'prefetch_queue_size' => count($this->prefetch_queue),
             'warming_patterns' => $this->get_warming_patterns(),
@@ -879,7 +898,7 @@ class CacheManager
         global $wpdb;
         $cache_table = $wpdb->prefix . 'social_feed_cache';
 
-        $wpdb->replace(
+        return $wpdb->replace(
             $cache_table,
             [
                 'cache_key' => $cache_key,

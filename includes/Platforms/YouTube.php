@@ -228,16 +228,45 @@ class YouTube extends AbstractPlatform
     /**
      * Get details for a single video
      */
+    /**
+     * Get details for multiple videos in a single request
+     *
+     * @param array $video_ids Array of video IDs
+     * @return array
+     */
+    private function get_batch_video_details($video_ids)
+    {
+        if (empty($video_ids)) {
+            return [];
+        }
+
+        // Chunk IDs into groups of 50 (YouTube API limit)
+        $chunks = array_chunk($video_ids, 50);
+        $all_items = [];
+
+        foreach ($chunks as $chunk) {
+            $params = [
+                'part' => 'snippet,statistics,contentDetails,liveStreamingDetails',
+                'id' => implode(',', $chunk),
+                'key' => $this->config['api_key']
+            ];
+
+            $data = $this->make_api_request(self::API_BASE_URL . '/videos', $params, 'videos');
+            if (!empty($data['items'])) {
+                $all_items = array_merge($all_items, $data['items']);
+            }
+        }
+
+        return $all_items;
+    }
+
+    /**
+     * Get details for a single video
+     */
     private function get_video_details($video_id)
     {
-        $params = [
-            'part' => 'snippet,statistics,contentDetails,liveStreamingDetails',
-            'id' => $video_id,
-            'key' => $this->config['api_key']
-        ];
-
-        $data = $this->make_api_request(self::API_BASE_URL . '/videos', $params, 'videos');
-        return !empty($data['items'][0]) ? $data['items'][0] : null;
+        $items = $this->get_batch_video_details([$video_id]);
+        return !empty($items[0]) ? $items[0] : null;
     }
 
     /**
@@ -272,23 +301,41 @@ class YouTube extends AbstractPlatform
                 ARRAY_A
             );
 
-            // If we have active streams, prioritize checking their status
+            // If we have active streams, check their status in batches
             if (!empty($active_streams)) {
-                foreach ($active_streams as $stream) {
+                $stream_ids = array_column($active_streams, 'stream_id');
+                // Check quota for the number of requests we need (1 request per 50 items)
+                $required_requests = ceil(count($stream_ids) / 50);
+
+                // We treat batch updates as 'videos' operation cost (1 unit per page of 50)
+                // This is a massive saving compared to N * 1
+                for ($i = 0; $i < $required_requests; $i++) {
                     if (!$this->check_quota('videos')) {
                         return;
                     }
+                }
 
-                    $video_data = $this->get_video_details($stream['stream_id']);
-                    if ($video_data) {
-                        $this->update_stream_status($stream, $video_data);
+                $videos_data = $this->get_batch_video_details($stream_ids);
+
+                // Map results by ID for easy lookup
+                $videos_map = [];
+                foreach ($videos_data as $video) {
+                    $videos_map[$video['id']] = $video;
+                }
+
+                foreach ($active_streams as $stream) {
+                    if (isset($videos_map[$stream['stream_id']])) {
+                        $this->update_stream_status($stream, $videos_map[$stream['stream_id']]);
                     }
                 }
             }
 
             // Only search for new streams if we haven't exceeded our quota
             if ($this->check_quota('search')) {
-                // Search for live streams
+                // Collect all video IDs from searches to process in one batch
+                $video_ids_to_process = [];
+
+                // 1. Search for LIVE
                 $params = [
                     'part' => 'snippet',
                     'channelId' => $this->config['channel_id'],
@@ -297,40 +344,51 @@ class YouTube extends AbstractPlatform
                     'key' => $this->config['api_key'],
                     'maxResults' => 50
                 ];
-
                 $live_data = $this->make_api_request(self::API_BASE_URL . '/search', $params, 'search');
-
                 if (!empty($live_data['items'])) {
                     foreach ($live_data['items'] as $item) {
-                        $video_id = $item['id']['videoId'];
-                        $this->process_live_stream($video_id);
+                        $video_ids_to_process[] = $item['id']['videoId'];
                     }
                 }
 
-                // Check for upcoming streams
+                // 2. Search for UPCOMING (if quota allows)
                 if ($this->check_quota('search')) {
                     $params['eventType'] = 'upcoming';
                     $upcoming_data = $this->make_api_request(self::API_BASE_URL . '/search', $params, 'search');
-
                     if (!empty($upcoming_data['items'])) {
                         foreach ($upcoming_data['items'] as $item) {
-                            $video_id = $item['id']['videoId'];
-                            $this->process_live_stream($video_id);
+                            $video_ids_to_process[] = $item['id']['videoId'];
                         }
                     }
                 }
 
-                // Check for completed streams from the last 7 days
+                // 3. Search for COMPLETED (if quota allows)
                 if ($this->check_quota('search')) {
                     $params['eventType'] = 'completed';
                     $params['publishedAfter'] = date('c', strtotime('-7 days'));
                     $completed_data = $this->make_api_request(self::API_BASE_URL . '/search', $params, 'search');
-
                     if (!empty($completed_data['items'])) {
                         foreach ($completed_data['items'] as $item) {
-                            $video_id = $item['id']['videoId'];
-                            $this->process_live_stream($video_id);
+                            $video_ids_to_process[] = $item['id']['videoId'];
                         }
+                    }
+                }
+
+                // Process all found videos in batches
+                if (!empty($video_ids_to_process)) {
+                    $unique_ids = array_unique($video_ids_to_process);
+
+                    // Check quota for details fetch
+                    $details_requests = ceil(count($unique_ids) / 50);
+                    for ($i = 0; $i < $details_requests; $i++) {
+                        if (!$this->check_quota('videos')) {
+                            break; // Stop if we run out of quota mid-batch
+                        }
+                    }
+
+                    $videos_details = $this->get_batch_video_details($unique_ids);
+                    foreach ($videos_details as $video_data) {
+                        $this->process_stream_data($video_data);
                     }
                 }
             }
@@ -340,19 +398,14 @@ class YouTube extends AbstractPlatform
     }
 
     /**
-     * Process a live stream and update its status
+     * Process stream data and update status
+     * 
+     * @param array $video_data Video details from API
      */
-    private function process_live_stream($video_id)
+    private function process_stream_data($video_data)
     {
-        if (!$this->check_quota('videos')) {
-            return;
-        }
-
         try {
-            $video_data = $this->get_video_details($video_id);
-            if (!$video_data) {
-                return;
-            }
+            $video_id = $video_data['id'];
 
             // Only process if it has live streaming details or is a completed live stream
             $streaming_details = $video_data['liveStreamingDetails'] ?? [];
@@ -379,7 +432,6 @@ class YouTube extends AbstractPlatform
                     'actualEndTime' => $end_time->format('c'),
                     'concurrentViewers' => $video_data['statistics']['viewCount'] ?? 0
                 ];
-
             }
 
             global $wpdb;
@@ -404,10 +456,19 @@ class YouTube extends AbstractPlatform
                 $this->insert_new_stream($video_data);
             }
 
-
-
         } catch (\Exception $e) {
-            error_log('YouTube: Error processing live stream ' . $video_id . ': ' . $e->getMessage());
+            error_log('YouTube: Error processing stream data ' . ($video_data['id'] ?? 'unknown') . ': ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Legacy method wrapper for backward compatibility
+     */
+    private function process_live_stream($video_id)
+    {
+        $video_data = $this->get_video_details($video_id);
+        if ($video_data) {
+            $this->process_stream_data($video_data);
         }
     }
 
@@ -1938,12 +1999,14 @@ class YouTube extends AbstractPlatform
         $video_ids = [];
 
         try {
+            $items = [];
+            $video_ids = [];
             // Cache key for live broadcasts to prevent frequent API calls
             $cache_key = 'youtube_live_' . $this->config['channel_id'];
             $cached_live = get_transient($cache_key);
 
             if ($cached_live !== false) {
-                return $cached_live;
+                return (array) $cached_live;
             }
 
             // We have to use search for live streams as it's the only way to filter by eventType
@@ -1968,7 +2031,7 @@ class YouTube extends AbstractPlatform
 
             // Get video details in batch
             if (!empty($video_ids)) {
-                $videos = $this->get_videos_batch($video_ids);
+                $videos = $this->get_batch_video_details($video_ids);
                 foreach ($videos as $video) {
                     $formatted_item = $this->format_feed_item($video, 'live');
                     if ($formatted_item) {
