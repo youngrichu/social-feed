@@ -1429,7 +1429,7 @@ class Admin
                     esc_attr($status_class),
                     esc_html($status_text),
                     number_format($current_usage),
-                    number_format(\SocialFeed\Core\QuotaManager::QUOTA_LIMIT_PER_DAY)
+                    number_format($quota_manager->get_quota_limit())
                 );
             }
 

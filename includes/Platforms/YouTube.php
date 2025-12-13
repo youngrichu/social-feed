@@ -18,7 +18,6 @@ class YouTube extends AbstractPlatform
     /**
      * Constants for rate limiting and quota management
      */
-    const QUOTA_LIMIT_PER_DAY = 10000; // Default YouTube API quota limit
     const QUOTA_COSTS = [
         'search' => 100,
         'videos' => 1,
@@ -922,7 +921,8 @@ class YouTube extends AbstractPlatform
         $current_usage = isset($quota_stats[$today]) ? ($quota_stats[$today]['usage'] ?? 0) : 0;
 
         // Calculate percentage of quota used
-        $quota_percentage = ($current_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
+        $max_quota = $this->quota_manager->get_quota_limit();
+        $quota_percentage = ($current_usage / $max_quota) * 100;
 
         // Get remaining hours in the day
         $now = new \DateTime();
@@ -930,7 +930,7 @@ class YouTube extends AbstractPlatform
         $hours_remaining = ($end_of_day->getTimestamp() - $now->getTimestamp()) / 3600;
 
         // Calculate remaining quota
-        $remaining_quota = self::QUOTA_LIMIT_PER_DAY - $current_usage;
+        $remaining_quota = $this->quota_manager->get_quota_limit() - $current_usage;
 
         // Cost per check (search + average video details)
         $cost_per_check = self::QUOTA_COSTS['search'] + (self::QUOTA_COSTS['videos'] * 5);
@@ -966,7 +966,8 @@ class YouTube extends AbstractPlatform
         $quota_stats = $this->get_quota_stats();
         $today = date('Y-m-d');
         $current_usage = isset($quota_stats[$today]) ? ($quota_stats[$today]['usage'] ?? 0) : 0;
-        return ($current_usage / self::QUOTA_LIMIT_PER_DAY) * 100;
+        $max_quota = $this->quota_manager->get_quota_limit();
+        return ($current_usage / $max_quota) * 100;
     }
 
     /**
