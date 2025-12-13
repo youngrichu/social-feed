@@ -133,8 +133,7 @@ class Admin
             return;
         }
 
-        error_log('Social Feed: Enqueuing admin assets for hook: ' . $hook);
-        error_log('Social Feed: Plugin URL: ' . SOCIAL_FEED_PLUGIN_URL);
+
 
         wp_enqueue_style(
             'social-feed-admin',
@@ -550,7 +549,7 @@ class Admin
             $performance_data = ['error' => $e->getMessage()];
             $system_status = ['status' => 'error', 'message' => $e->getMessage()];
         }
-        error_log('DEBUG: Performance Data in Admin: ' . print_r($performance_data, true));
+
         ?>
         <div class="social-feed-performance-dashboard">
             <div class="performance-cards">
@@ -1555,11 +1554,8 @@ class Admin
      */
     public function handle_clear_cache()
     {
-        error_log('Social Feed: Clear cache request received');
-
         // Verify nonce
         if (!check_ajax_referer('social_feed_admin', 'nonce', false)) {
-            error_log('Social Feed: Nonce verification failed');
             wp_send_json_error(['message' => 'Invalid security token']);
             return;
         }
@@ -1568,19 +1564,15 @@ class Admin
             global $wpdb;
             $cache_table = $wpdb->prefix . 'social_feed_cache';
 
-            error_log('Social Feed: Attempting to clear cache table: ' . $cache_table);
-
             // Delete all records instead of truncate
             $result = $wpdb->query("DELETE FROM $cache_table");
 
             if ($result !== false) {
-                error_log('Social Feed: Cache cleared successfully. Rows affected: ' . $result);
                 wp_send_json_success([
                     'message' => 'Cache cleared successfully',
                     'rows_affected' => $result
                 ]);
             } else {
-                error_log('Social Feed: Error clearing cache - wpdb error: ' . $wpdb->last_error);
                 wp_send_json_error([
                     'message' => 'Database error while clearing cache',
                     'error' => $wpdb->last_error
@@ -1600,24 +1592,18 @@ class Admin
      */
     public function handle_refresh_feeds()
     {
-        error_log('Social Feed: Starting feed refresh');
-
         // Verify nonce
         if (!check_ajax_referer('social_feed_admin', 'nonce', false)) {
-            error_log('Social Feed: Nonce verification failed');
             wp_send_json_error(['message' => 'Invalid security token']);
             return;
         }
 
         try {
             $feed_service = new \SocialFeed\Services\FeedService();
-            error_log('Social Feed: Initialized FeedService');
 
             $result = $feed_service->get_feeds();
-            error_log('Social Feed: Feed service returned result: ' . json_encode($result));
 
             if (isset($result['status']) && $result['status'] === 'error') {
-                error_log('Social Feed: Feed service returned error status');
                 wp_send_json_error([
                     'message' => 'Error refreshing feeds: ' . ($result['message'] ?? 'Unknown error'),
                     'details' => $result['data'] ?? []
@@ -1631,7 +1617,6 @@ class Admin
             ]);
         } catch (\Exception $e) {
             error_log('Social Feed: Error in refresh_feeds: ' . $e->getMessage());
-            error_log('Social Feed: Error trace: ' . $e->getTraceAsString());
             wp_send_json_error([
                 'message' => 'Error refreshing feeds: ' . $e->getMessage(),
                 'details' => [

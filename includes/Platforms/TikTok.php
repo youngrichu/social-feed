@@ -27,7 +27,6 @@ class TikTok extends AbstractPlatform
     public function get_feed($types = [], $args = [])
     {
         if (!$this->is_configured()) {
-            error_log('TikTok Feed: Not configured properly. Config: ' . json_encode($this->config));
             return [];
         }
 
@@ -48,7 +47,7 @@ class TikTok extends AbstractPlatform
                         break;
                 }
             } catch (\Exception $e) {
-                error_log("TikTok Feed Error fetching {$type}s: " . $e->getMessage() . "\nStack trace: " . $e->getTraceAsString());
+                error_log("TikTok Feed Error fetching {$type}s: " . $e->getMessage());
             }
         }
 
@@ -152,7 +151,6 @@ class TikTok extends AbstractPlatform
                 $memory_usage_percent = ($current_memory / $memory_limit) * 100;
 
                 if ($memory_usage_percent > 80) {
-                    error_log("TikTok: Memory usage at {$memory_usage_percent}% - implementing memory optimization");
 
                     // Force garbage collection
                     gc_collect_cycles();
@@ -162,7 +160,6 @@ class TikTok extends AbstractPlatform
                     $memory_usage_percent = ($current_memory / $memory_limit) * 100;
 
                     if ($memory_usage_percent > 85) {
-                        error_log("TikTok: Memory usage still high at {$memory_usage_percent}% - stopping video fetch to prevent memory exhaustion");
                         break;
                     }
                 }
@@ -383,7 +380,7 @@ class TikTok extends AbstractPlatform
      */
     protected function make_request($url, $args = [], $max_retries = 3)
     {
-        error_log('TikTok API Request: ' . $url . ' with args: ' . json_encode($args['body'] ?? []));
+
 
         // Add TikTok-specific API key to headers before calling parent
         if (!isset($args['headers'])) {

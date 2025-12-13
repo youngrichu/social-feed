@@ -59,18 +59,7 @@ class PerformanceMonitor
         $saved = update_option($this->options_key, $metrics, false);
 
         if (!$saved) {
-            // It might return false if value is unchanged, but here count always changes.
-            // Or if option update failed.
-            // Just logging for visibility.
-            // check if it's just unchanged
-            $current = get_option($this->options_key);
-            if ($current === $metrics) {
-                // unchanged, weird but okay
-            } else {
-                error_log("PerformanceMonitor: Failed to save metrics for platform $platform. Option key: {$this->options_key}");
-            }
-        } else {
-            error_log("PerformanceMonitor: Recorded metric for $platform: {$response_time}s. Total count: {$metrics[$platform]['count']}");
+            // Silently handle save failures
         }
 
         return [

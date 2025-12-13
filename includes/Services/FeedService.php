@@ -49,7 +49,6 @@ class FeedService
 
             // If no platforms are enabled or specified, return error
             if (empty($platforms)) {
-                error_log('FeedService: No platforms available');
                 return [
                     'status' => 'error',
                     'message' => 'No social media platforms are enabled or properly configured',
@@ -67,7 +66,6 @@ class FeedService
 
             // If a playlist filter is specified, fetch directly from platform (bypass cache)
             if (!empty($args['playlist'])) {
-                error_log('FeedService: Playlist filter specified, fetching from platform: ' . $args['playlist']);
                 $fetch_results = $this->fetch_platforms_parallel($platforms, $types, $args);
 
                 $all_items = [];
@@ -137,7 +135,6 @@ class FeedService
 
             // If no items found, try to fetch fresh content
             if ($total_items == 0) {
-                error_log('FeedService: No cached items found, fetching fresh content');
                 $platform_errors = [];
 
 
@@ -206,7 +203,6 @@ class FeedService
 
                 // If we have errors but also some content, include errors in response
                 if (!empty($platform_errors)) {
-                    error_log('FeedService: Some platforms had errors: ' . json_encode($platform_errors));
                     if ($total_items === 0) {
                         return [
                             'status' => 'error',
@@ -259,7 +255,6 @@ class FeedService
             ];
         } catch (\Exception $e) {
             error_log('FeedService: Critical error in get_feeds: ' . $e->getMessage());
-            error_log('FeedService: Error trace: ' . $e->getTraceAsString());
             return [
                 'status' => 'error',
                 'message' => 'Internal error while fetching feeds: ' . $e->getMessage(),
@@ -380,7 +375,6 @@ class FeedService
             try {
                 $platform_handler = $this->platform_factory->get_platform($platform);
                 if (!$platform_handler) {
-                    error_log("FeedService: Platform handler not found for $platform");
                     $results[$platform] = [
                         'status' => 'error',
                         'message' => 'Platform handler not found',
@@ -390,7 +384,6 @@ class FeedService
                 }
 
                 if (!method_exists($platform_handler, 'is_configured') || !$platform_handler->is_configured()) {
-                    error_log("FeedService: Platform $platform is not properly configured");
                     $results[$platform] = [
                         'status' => 'error',
                         'message' => 'Platform is not properly configured',
@@ -409,7 +402,6 @@ class FeedService
                 set_time_limit($original_timeout);
 
                 if (!is_array($platform_items)) {
-                    error_log("FeedService: Invalid response from $platform platform");
                     $results[$platform] = [
                         'status' => 'error',
                         'message' => 'Invalid platform response',
@@ -434,7 +426,6 @@ class FeedService
             } catch (\Exception $e) {
                 $platform_time = microtime(true) - $platform_start;
                 error_log("FeedService: Error fetching from $platform: " . $e->getMessage());
-                error_log("FeedService: Error trace: " . $e->getTraceAsString());
 
                 $results[$platform] = [
                     'status' => 'error',

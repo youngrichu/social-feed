@@ -13,7 +13,8 @@ use SocialFeed\Platforms\PlatformFactory;
  * - Intelligent error handling and result aggregation
  * - Performance monitoring and optimization
  */
-class AsyncFeedService {
+class AsyncFeedService
+{
     /**
      * @var Cache
      */
@@ -39,7 +40,8 @@ class AsyncFeedService {
      */
     private $request_timeout = 15;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->cache = new Cache();
         $this->platform_factory = new PlatformFactory();
     }
@@ -52,9 +54,10 @@ class AsyncFeedService {
      * @param array $options Additional options
      * @return array
      */
-    public function fetch_async($platforms = [], $types = [], $options = []) {
+    public function fetch_async($platforms = [], $types = [], $options = [])
+    {
         $start_time = microtime(true);
-        
+
         // Initialize performance tracking
         $this->performance_metrics = [
             'start_time' => $start_time,
@@ -100,22 +103,22 @@ class AsyncFeedService {
      * @param array $options
      * @return array
      */
-    private function process_platforms_concurrent($platforms, $types, $options) {
+    private function process_platforms_concurrent($platforms, $types, $options)
+    {
         $results = [];
         $batches = array_chunk($platforms, $this->max_concurrent_requests);
-        
+
         foreach ($batches as $batch_index => $batch) {
-            error_log("AsyncFeedService: Processing batch " . ($batch_index + 1) . " with platforms: " . implode(', ', $batch));
-            
+
             $batch_results = $this->process_batch_async($batch, $types, $options);
             $results = array_merge($results, $batch_results);
-            
+
             // Memory cleanup between batches
             if (function_exists('gc_collect_cycles')) {
                 gc_collect_cycles();
             }
         }
-        
+
         return $results;
     }
 
@@ -127,10 +130,11 @@ class AsyncFeedService {
      * @param array $options
      * @return array
      */
-    private function process_batch_async($batch, $types, $options) {
+    private function process_batch_async($batch, $types, $options)
+    {
         $results = [];
         $processes = [];
-        
+
         // Implement true parallel processing using curl_multi for better RPS
         if (function_exists('curl_multi_init') && count($batch) > 1) {
             $results = $this->process_batch_parallel($batch, $types, $options);
@@ -138,41 +142,42 @@ class AsyncFeedService {
             // Fallback to optimized sequential processing
             $results = $this->process_batch_sequential($batch, $types, $options);
         }
-        
+
         return $results;
     }
-    
+
     /**
      * Process batch using parallel curl requests
      */
-    private function process_batch_parallel($batch, $types, $options) {
+    private function process_batch_parallel($batch, $types, $options)
+    {
         $results = [];
         $curl_handles = [];
         $multi_handle = curl_multi_init();
-        
+
         // Set up parallel requests
         foreach ($batch as $platform) {
             $platform_start = microtime(true);
             $initial_memory = memory_get_usage(true);
-            
+
             try {
                 $result = $this->fetch_platform_content($platform, $types, $options);
-                
+
                 $execution_time = microtime(true) - $platform_start;
                 $memory_used = memory_get_usage(true) - $initial_memory;
-                
+
                 $this->performance_metrics['platforms'][$platform] = [
                     'execution_time' => $execution_time,
                     'memory_used' => $memory_used,
                     'items_count' => is_array($result['data']) ? count($result['data']) : 0,
                     'status' => $result['status']
                 ];
-                
+
                 $results[$platform] = $result;
-                
+
             } catch (\Exception $e) {
                 $execution_time = microtime(true) - $platform_start;
-                
+
                 $this->performance_metrics['platforms'][$platform] = [
                     'execution_time' => $execution_time,
                     'memory_used' => memory_get_usage(true) - $initial_memory,
@@ -180,13 +185,13 @@ class AsyncFeedService {
                     'status' => 'error',
                     'error' => $e->getMessage()
                 ];
-                
+
                 $this->performance_metrics['errors'][] = [
                     'platform' => $platform,
                     'error' => $e->getMessage(),
                     'type' => get_class($e)
                 ];
-                
+
                 $results[$platform] = [
                     'status' => 'error',
                     'message' => $e->getMessage(),
@@ -194,39 +199,40 @@ class AsyncFeedService {
                 ];
             }
         }
-        
+
         curl_multi_close($multi_handle);
         return $results;
     }
-    
+
     /**
      * Process batch sequentially with optimizations
      */
-    private function process_batch_sequential($batch, $types, $options) {
+    private function process_batch_sequential($batch, $types, $options)
+    {
         $results = [];
-        
+
         foreach ($batch as $platform) {
             $platform_start = microtime(true);
             $initial_memory = memory_get_usage(true);
-            
+
             try {
                 $result = $this->fetch_platform_content($platform, $types, $options);
-                
+
                 $execution_time = microtime(true) - $platform_start;
                 $memory_used = memory_get_usage(true) - $initial_memory;
-                
+
                 $this->performance_metrics['platforms'][$platform] = [
                     'execution_time' => $execution_time,
                     'memory_used' => $memory_used,
                     'items_count' => is_array($result['data']) ? count($result['data']) : 0,
                     'status' => $result['status']
                 ];
-                
+
                 $results[$platform] = $result;
-                
+
             } catch (\Exception $e) {
                 $execution_time = microtime(true) - $platform_start;
-                
+
                 $this->performance_metrics['platforms'][$platform] = [
                     'execution_time' => $execution_time,
                     'memory_used' => memory_get_usage(true) - $initial_memory,
@@ -234,13 +240,13 @@ class AsyncFeedService {
                     'status' => 'error',
                     'error' => $e->getMessage()
                 ];
-                
+
                 $this->performance_metrics['errors'][] = [
                     'platform' => $platform,
                     'error' => $e->getMessage(),
                     'type' => get_class($e)
                 ];
-                
+
                 $results[$platform] = [
                     'status' => 'error',
                     'message' => $e->getMessage(),
@@ -248,7 +254,7 @@ class AsyncFeedService {
                 ];
             }
         }
-        
+
         return $results;
     }
 
@@ -260,28 +266,29 @@ class AsyncFeedService {
      * @param array $options
      * @return array
      */
-    private function process_platforms_sequential($platforms, $types, $options) {
+    private function process_platforms_sequential($platforms, $types, $options)
+    {
         $results = [];
-        
+
         foreach ($platforms as $platform) {
             $platform_start = microtime(true);
-            
+
             try {
                 $result = $this->fetch_platform_content($platform, $types, $options);
                 $results[$platform] = $result;
-                
+
                 $this->performance_metrics['platforms'][$platform] = [
                     'execution_time' => microtime(true) - $platform_start,
                     'items_count' => is_array($result['data']) ? count($result['data']) : 0,
                     'status' => $result['status']
                 ];
-                
+
             } catch (\Exception $e) {
                 $this->performance_metrics['errors'][] = [
                     'platform' => $platform,
                     'error' => $e->getMessage()
                 ];
-                
+
                 $results[$platform] = [
                     'status' => 'error',
                     'message' => $e->getMessage(),
@@ -289,7 +296,7 @@ class AsyncFeedService {
                 ];
             }
         }
-        
+
         return $results;
     }
 
@@ -301,9 +308,10 @@ class AsyncFeedService {
      * @param array $options
      * @return array
      */
-    private function fetch_platform_content($platform, $types, $options) {
+    private function fetch_platform_content($platform, $types, $options)
+    {
         $platform_handler = $this->platform_factory->get_platform($platform);
-        
+
         if (!$platform_handler) {
             throw new \Exception("Platform handler not found for $platform");
         }
@@ -317,15 +325,15 @@ class AsyncFeedService {
         if ($original_timeout != 0) {
             set_time_limit($this->request_timeout);
         }
-        
+
         try {
             $platform_items = $platform_handler->get_feed($types);
-            
+
             // Restore original timeout
             if ($original_timeout != 0) {
                 set_time_limit($original_timeout);
             }
-            
+
             if (!is_array($platform_items)) {
                 throw new \Exception("Invalid response from $platform platform");
             }
@@ -335,7 +343,7 @@ class AsyncFeedService {
                 'message' => 'Content fetched successfully',
                 'data' => $platform_items
             ];
-            
+
         } catch (\Exception $e) {
             // Restore original timeout on error
             if ($original_timeout != 0) {
@@ -351,11 +359,12 @@ class AsyncFeedService {
      * @param array $results
      * @return array
      */
-    private function aggregate_results($results) {
+    private function aggregate_results($results)
+    {
         $aggregated_data = [];
         $platform_errors = [];
         $successful_platforms = 0;
-        
+
         foreach ($results as $platform => $result) {
             if ($result['status'] === 'success') {
                 $aggregated_data = array_merge($aggregated_data, $result['data']);
@@ -365,14 +374,14 @@ class AsyncFeedService {
                 $platform_errors[$platform] = $result['message'];
             }
         }
-        
+
         // Sort by creation date (newest first)
-        usort($aggregated_data, function($a, $b) {
+        usort($aggregated_data, function ($a, $b) {
             $time_a = strtotime($a['created_at'] ?? '1970-01-01');
             $time_b = strtotime($b['created_at'] ?? '1970-01-01');
             return $time_b - $time_a;
         });
-        
+
         $response = [
             'status' => $successful_platforms > 0 ? 'success' : 'error',
             'data' => $aggregated_data,
@@ -383,11 +392,11 @@ class AsyncFeedService {
                 'performance' => $this->get_performance_summary()
             ]
         ];
-        
+
         if (!empty($platform_errors)) {
             $response['platform_errors'] = $platform_errors;
         }
-        
+
         return $response;
     }
 
@@ -396,13 +405,14 @@ class AsyncFeedService {
      *
      * @return array
      */
-    private function get_enabled_platforms() {
+    private function get_enabled_platforms()
+    {
         $platforms = \get_option('social_feed_platforms', []);
-        
-        $enabled = array_keys(array_filter($platforms, function($platform_config, $platform_name) {
+
+        $enabled = array_keys(array_filter($platforms, function ($platform_config, $platform_name) {
             $is_enabled = !empty($platform_config['enabled']);
             $has_required = true;
-            
+
             if ($is_enabled) {
                 switch ($platform_name) {
                     case 'youtube':
@@ -413,10 +423,10 @@ class AsyncFeedService {
                         break;
                 }
             }
-            
+
             return $is_enabled && $has_required;
         }, ARRAY_FILTER_USE_BOTH));
-        
+
         return $enabled;
     }
 
@@ -426,7 +436,8 @@ class AsyncFeedService {
      * @param string $message
      * @return array
      */
-    private function create_error_response($message) {
+    private function create_error_response($message)
+    {
         return [
             'status' => 'error',
             'message' => $message,
@@ -442,10 +453,11 @@ class AsyncFeedService {
      *
      * @return array
      */
-    private function get_performance_summary() {
+    private function get_performance_summary()
+    {
         $total_time = $this->performance_metrics['total_time'] ?? 0;
         $total_items = $this->performance_metrics['total_items'] ?? 0;
-        
+
         return [
             'total_execution_time' => round($total_time, 3),
             'total_items_fetched' => $total_items,
@@ -459,18 +471,9 @@ class AsyncFeedService {
     /**
      * Log performance metrics
      */
-    private function log_performance_metrics() {
-        $summary = $this->get_performance_summary();
-        
-        error_log('AsyncFeedService Performance Summary: ' . json_encode($summary));
-        
-        foreach ($this->performance_metrics['platforms'] as $platform => $metrics) {
-            error_log("AsyncFeedService Platform $platform: " . json_encode($metrics));
-        }
-        
-        if (!empty($this->performance_metrics['errors'])) {
-            error_log('AsyncFeedService Errors: ' . json_encode($this->performance_metrics['errors']));
-        }
+    private function log_performance_metrics()
+    {
+        // Performance logging disabled for production
     }
 
     /**
@@ -479,14 +482,15 @@ class AsyncFeedService {
      * @param int $bytes
      * @return string
      */
-    private function format_bytes($bytes) {
+    private function format_bytes($bytes)
+    {
         $units = ['B', 'KB', 'MB', 'GB'];
         $bytes = max($bytes, 0);
         $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
         $pow = min($pow, count($units) - 1);
-        
+
         $bytes /= (1 << (10 * $pow));
-        
+
         return round($bytes, 2) . ' ' . $units[$pow];
     }
 
@@ -495,7 +499,8 @@ class AsyncFeedService {
      *
      * @param int $max_concurrent
      */
-    public function set_max_concurrent_requests($max_concurrent) {
+    public function set_max_concurrent_requests($max_concurrent)
+    {
         $this->max_concurrent_requests = max(1, min($max_concurrent, 10));
     }
 
@@ -504,7 +509,8 @@ class AsyncFeedService {
      *
      * @param int $timeout
      */
-    public function set_request_timeout($timeout) {
+    public function set_request_timeout($timeout)
+    {
         $this->request_timeout = max(10, min($timeout, 120));
     }
 }
