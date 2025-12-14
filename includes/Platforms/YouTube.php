@@ -2085,6 +2085,14 @@ class YouTube extends AbstractPlatform
             return [];
         }
 
+        // Check cache for playlists
+        $cache_key = 'youtube_playlists_list_' . $this->config['channel_id'];
+        $cached_playlists = get_transient($cache_key);
+
+        if ($cached_playlists !== false && is_array($cached_playlists)) {
+            return $cached_playlists;
+        }
+
         try {
             $playlists = [];
             $next_page_token = null;
@@ -2130,6 +2138,12 @@ class YouTube extends AbstractPlatform
             } while ($next_page_token);
 
             error_log('YouTube: Fetched ' . count($playlists) . ' playlists');
+
+            // Cache playlists for 1 day as they don't change often
+            if (!empty($playlists)) {
+                set_transient($cache_key, $playlists, DAY_IN_SECONDS);
+            }
+
             return $playlists;
 
         } catch (\Exception $e) {
@@ -2150,6 +2164,14 @@ class YouTube extends AbstractPlatform
         if (!$this->is_configured()) {
             error_log('YouTube: Platform not configured for playlist items');
             return [];
+        }
+
+        // Check for cached playlist items
+        $cache_key = 'youtube_playlist_items_' . $playlist_id . '_' . $max_pages;
+        $cached_items = get_transient($cache_key);
+
+        if ($cached_items !== false && is_array($cached_items)) {
+            return $cached_items;
         }
 
         try {
@@ -2193,6 +2215,8 @@ class YouTube extends AbstractPlatform
             error_log('YouTube: Found ' . count($video_ids) . ' video IDs in playlist ' . $playlist_id);
 
             if (empty($video_ids)) {
+                // Cache empty result for a shorter time (e.g., 5 minutes) to avoid repeated empty checks
+                set_transient($cache_key, [], 5 * MINUTE_IN_SECONDS);
                 return [];
             }
 
@@ -2226,6 +2250,12 @@ class YouTube extends AbstractPlatform
             }
 
             error_log('YouTube: Fetched ' . count($all_items) . ' videos from playlist ' . $playlist_id);
+
+            // Cache the results for 1 hour
+            if (!empty($all_items)) {
+                set_transient($cache_key, $all_items, HOUR_IN_SECONDS);
+            }
+
             return $all_items;
 
         } catch (\Exception $e) {
