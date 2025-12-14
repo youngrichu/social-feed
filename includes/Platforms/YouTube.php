@@ -461,16 +461,178 @@ class YouTube extends AbstractPlatform
     }
 
     /**
-     * Legacy method wrapper for backward compatibility
+     * Get videos from upload playlist
+     * 
+     * @param int $max_pages Maximum number of pages to fetch
+     * @return array
      */
-    private function process_live_stream($video_id)
+    public function get_videos($max_pages = 5)
     {
-        $video_data = $this->get_video_details($video_id);
-        if ($video_data) {
-            $this->process_stream_data($video_data);
+        // Check for cached main feed videos
+        $cache_key = 'youtube_main_feed_videos_' . $this->config['channel_id'] . '_' . $max_pages;
+        $cached_videos = get_transient($cache_key);
+
+        if ($cached_videos !== false && is_array($cached_videos)) {
+            error_log("YouTube: Cache HIT for main feed videos (Key: $cache_key). Items: " . count($cached_videos));
+            return $cached_videos;
+        }
+
+        error_log("YouTube: Cache MISS for main feed videos (Key: $cache_key). Fetching from API...");
+
+        $all_items = [];
+        $next_page_token = null;
+        $page_count = 0;
+        $video_ids = [];
+
+        try {
+
+            // Get uploads playlist ID with longer cache duration
+            $uploads_playlist_id = get_transient('youtube_uploads_playlist_' . $this->config['channel_id']);
+
+            if (!$uploads_playlist_id && $this->check_quota('channels')) {
+                $channel_params = [
+                    'part' => 'contentDetails',
+                    'id' => $this->config['channel_id'],
+                    'key' => $this->config['api_key']
+                ];
+
+                $channel_data = $this->make_api_request(self::API_BASE_URL . '/channels', $channel_params, 'channels');
+                if (!empty($channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads'])) {
+                    $uploads_playlist_id = $channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads'];
+                    set_transient('youtube_uploads_playlist_' . $this->config['channel_id'], $uploads_playlist_id, WEEK_IN_SECONDS);
+                } else {
+                    return [];
+                }
+            }
+
+            if (!$uploads_playlist_id) {
+                return [];
+            }
+
+            // Check if we have any cached videos in DB (legacy check, keep for now)
+            global $wpdb;
+            $cache_table = $wpdb->prefix . 'social_feed_cache';
+            $cached_count = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM $cache_table WHERE platform = %s AND content_type = %s",
+                'youtube',
+                'video'
+            ));
+
+
+            // For initial fetch, get all videos. For updates, only get recent ones
+            $is_initial_fetch = ($cached_count == 0);
+
+            // For initial fetch, increase max_pages to get more historical content
+            if ($is_initial_fetch) {
+                $max_pages = 20; // Fetch up to 1000 videos (20 pages × 50 videos per page)
+            }
+
+            // STEP 1: Get all video IDs from the playlist
+            do {
+                if (!$this->check_quota('playlistItems')) {
+                    break;
+                }
+
+                $params = [
+                    'part' => 'snippet',
+                    'playlistId' => $uploads_playlist_id,
+                    'maxResults' => 50,
+                    'key' => $this->config['api_key']
+                ];
+
+                if ($next_page_token) {
+                    $params['pageToken'] = $next_page_token;
+                }
+
+                $data = $this->make_api_request(self::API_BASE_URL . '/playlistItems', $params, 'playlistItems');
+
+                if (!empty($data['items'])) {
+                    foreach ($data['items'] as $item) {
+                        if (!empty($item['snippet']['resourceId']['videoId'])) {
+                            $published_at = strtotime($item['snippet']['publishedAt']);
+
+                            // For initial fetch, get all videos
+                            // For updates, only get videos from last 24 hours
+                            if ($is_initial_fetch || $published_at >= strtotime('-24 hours')) {
+                                $video_ids[] = $item['snippet']['resourceId']['videoId'];
+                            }
+                        }
+                    }
+                }
+
+                $next_page_token = $data['nextPageToken'] ?? null;
+                $page_count++;
+
+                // Stop if we don't need more pages
+                if (!$is_initial_fetch && empty($video_ids) && $page_count >= 1) {
+                    break;
+                }
+
+            } while ($next_page_token && $page_count < $max_pages);
+
+            error_log('YouTube: Found ' . count($video_ids) . ' video IDs to fetch');
+
+            if (empty($video_ids)) {
+                // Cache empty result shorter
+                set_transient($cache_key, [], 5 * MINUTE_IN_SECONDS);
+                return [];
+            }
+
+            // STEP 2: Get full video details in batches of 50
+            // Deduplicate IDs first
+            $video_ids = array_unique($video_ids);
+            $video_chunks = array_chunk($video_ids, 50);
+
+            foreach ($video_chunks as $chunk) {
+                if (!$this->check_quota('videos')) {
+                    break;
+                }
+
+                $params = [
+                    'part' => 'snippet,statistics,contentDetails',
+                    'id' => implode(',', $chunk),
+                    'key' => $this->config['api_key']
+                ];
+
+                $video_data = $this->make_api_request(self::API_BASE_URL . '/videos', $params, 'videos');
+
+                if (!empty($video_data['items'])) {
+                    foreach ($video_data['items'] as $video) {
+                        // Skip if it's a short (we handle shorts separately)
+                        if ($this->is_short($video)) {
+                            continue;
+                        }
+
+                        $formatted = $this->format_feed_item($video, 'video');
+                        if ($formatted) {
+                            $all_items[] = $formatted;
+
+                            // Also save to DB cache (legacy system overlap, but safe)
+                            $this->store_video_in_cache($formatted);
+                        }
+                    }
+                }
+
+                // Memory management
+                if (function_exists('gc_collect_cycles')) {
+                    gc_collect_cycles();
+                }
+            }
+
+            error_log('YouTube: Fetched ' . count($all_items) . ' videos (main feed)');
+
+            // Cache the results for 1 hour
+            if (!empty($all_items)) {
+                set_transient($cache_key, $all_items, HOUR_IN_SECONDS);
+            }
+
+            return $all_items;
+
+        } catch (\Exception $e) {
+            error_log('YouTube: Error fetching videos - ' . $e->getMessage());
+            return [];
         }
     }
-
     /**
      * Enhanced API request with optimization
      */
@@ -1071,217 +1233,7 @@ class YouTube extends AbstractPlatform
         return true;
     }
 
-    /**
-     * Get videos from YouTube
-     *
-     * @param int $max_pages Maximum number of pages to fetch
-     * @return array
-     */
-    public function get_videos($max_pages = 5)
-    {
-        $all_items = [];
-        $next_page_token = null;
-        $page_count = 0;
-        $video_ids = [];
 
-        try {
-
-            // Get uploads playlist ID with longer cache duration
-            $uploads_playlist_id = get_transient('youtube_uploads_playlist_' . $this->config['channel_id']);
-
-            if (!$uploads_playlist_id && $this->check_quota('channels')) {
-                $channel_params = [
-                    'part' => 'contentDetails',
-                    'id' => $this->config['channel_id'],
-                    'key' => $this->config['api_key']
-                ];
-
-                $channel_data = $this->make_api_request(self::API_BASE_URL . '/channels', $channel_params, 'channels');
-                if (!empty($channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads'])) {
-                    $uploads_playlist_id = $channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads'];
-                    set_transient('youtube_uploads_playlist_' . $this->config['channel_id'], $uploads_playlist_id, WEEK_IN_SECONDS);
-                } else {
-                    return [];
-                }
-            }
-
-            if (!$uploads_playlist_id) {
-                return [];
-            }
-
-            // Check if we have any cached videos
-            global $wpdb;
-            $cache_table = $wpdb->prefix . 'social_feed_cache';
-            $cached_count = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM $cache_table WHERE platform = %s AND content_type = %s",
-                'youtube',
-                'video'
-            ));
-
-
-            // For initial fetch, get all videos. For updates, only get recent ones
-            $is_initial_fetch = ($cached_count == 0);
-
-            // For initial fetch, increase max_pages to get more historical content
-            if ($is_initial_fetch) {
-                $max_pages = 20; // Fetch up to 1000 videos (20 pages × 50 videos per page)
-            }
-
-            // STEP 1: Get all video IDs from the playlist
-            do {
-                if (!$this->check_quota('playlistItems')) {
-                    break;
-                }
-
-                $params = [
-                    'part' => 'snippet',
-                    'playlistId' => $uploads_playlist_id,
-                    'maxResults' => 50,
-                    'key' => $this->config['api_key']
-                ];
-
-                if ($next_page_token) {
-                    $params['pageToken'] = $next_page_token;
-                }
-
-                $data = $this->make_api_request(self::API_BASE_URL . '/playlistItems', $params, 'playlistItems');
-
-                if (!empty($data['items'])) {
-                    foreach ($data['items'] as $item) {
-                        if (!empty($item['snippet']['resourceId']['videoId'])) {
-                            $published_at = strtotime($item['snippet']['publishedAt']);
-
-                            // For initial fetch, get all videos
-                            // For updates, only get videos from last 24 hours
-                            if ($is_initial_fetch || $published_at >= strtotime('-24 hours')) {
-                                $video_ids[] = $item['snippet']['resourceId']['videoId'];
-                            }
-                        }
-                    }
-                }
-
-                $next_page_token = $data['nextPageToken'] ?? null;
-                $page_count++;
-
-                // For initial fetch, continue until max_pages or no more results
-                // For updates, stop after first page if no recent videos
-                if (!$is_initial_fetch && empty($video_ids) && $page_count >= 1) {
-                    break;
-                }
-
-                if ($page_count >= $max_pages || !$next_page_token) {
-                    break;
-                }
-
-            } while (true);
-
-            // If no video IDs found, return empty array
-            if (empty($video_ids)) {
-                return [];
-            }
-
-
-            // STEP 2: Get complete video details in batches of 50 with memory optimization
-            $unique_ids = array_unique($video_ids);
-            $video_batches = array_chunk($unique_ids, 50);
-
-            // Memory optimization: Track memory usage and implement streaming processing
-            $initial_memory = memory_get_usage(true);
-            $memory_limit = $this->get_memory_limit();
-            $processed_count = 0;
-
-
-            foreach ($video_batches as $batch_index => $batch) {
-                // Check memory usage before processing each batch
-                $current_memory = memory_get_usage(true);
-                $memory_usage_percent = ($current_memory / $memory_limit) * 100;
-
-                if ($memory_usage_percent > 80) {
-
-                    // Force garbage collection
-                    gc_collect_cycles();
-
-                    // If still high memory usage, reduce batch size or stop processing
-                    $current_memory = memory_get_usage(true);
-                    $memory_usage_percent = ($current_memory / $memory_limit) * 100;
-
-                    if ($memory_usage_percent > 85) {
-                        break;
-                    }
-                }
-
-                if (!$this->check_quota('videos')) {
-                    break;
-                }
-
-                // IMPORTANT: Request ALL required parts to get complete data
-                $params = [
-                    'part' => 'snippet,statistics,contentDetails,status',
-                    'id' => implode(',', $batch),
-                    'key' => $this->config['api_key']
-                ];
-
-
-                $batch_data = $this->make_api_request(self::API_BASE_URL . '/videos', $params, 'videos');
-
-                if (!empty($batch_data['items'])) {
-                    // Process videos in streaming fashion to minimize memory footprint
-                    foreach ($batch_data['items'] as $video) {
-                        // Skip processing if critical data is missing
-                        if (empty($video['snippet'])) {
-                            continue;
-                        }
-
-                        // Statistics might be missing for some videos, ignore silently
-                        // if (empty($video['statistics'])) { }
-
-                        // Format the video data with ALL required fields
-                        $formatted_item = $this->format_feed_item($video, 'video');
-                        if ($formatted_item) {
-                            // Add to return array
-                            $all_items[] = $formatted_item;
-
-                            // Store in cache with complete data
-                            $this->store_video_in_cache($formatted_item);
-
-                            $processed_count++;
-
-                            // Log progress every 50 videos
-                            if ($processed_count % 50 === 0) {
-                                $current_memory = memory_get_usage(true);
-                            }
-                        }
-
-                        // Clear video data from memory immediately after processing
-                        unset($video, $formatted_item);
-                    }
-
-                    // Clear batch data from memory
-                    unset($batch_data);
-
-                } else {
-                }
-
-                // Clear batch from memory
-                unset($batch);
-
-                // Periodic garbage collection every 5 batches
-                if (($batch_index + 1) % 5 === 0) {
-                    gc_collect_cycles();
-                }
-            }
-
-            // Final memory usage report
-            $final_memory = memory_get_usage(true);
-            $peak_memory = memory_get_peak_usage(true);
-
-            return $all_items;
-
-        } catch (\Exception $e) {
-            error_log('YouTube API Error in get_videos: ' . $e->getMessage());
-            return [];
-        }
-    }
 
     /**
      * Store video in cache with proper engagement data
@@ -2171,8 +2123,11 @@ class YouTube extends AbstractPlatform
         $cached_items = get_transient($cache_key);
 
         if ($cached_items !== false && is_array($cached_items)) {
+            error_log("YouTube: Cache HIT for playlist $playlist_id (Key: $cache_key). Items: " . count($cached_items));
             return $cached_items;
         }
+
+        error_log("YouTube: Cache MISS for playlist $playlist_id (Key: $cache_key). Fetching from API...");
 
         try {
             $all_items = [];
